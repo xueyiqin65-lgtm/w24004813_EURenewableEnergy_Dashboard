@@ -13,6 +13,10 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
+  <!-- D3 + TopoJSON for the custom EU-27 choropleth map -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+
   <style>
     /* ============================================================
        DESIGN TOKENS — same as before, kept identical
@@ -24,6 +28,7 @@
       --border:        #e3ebe2;
       --border-strong: #cbd9c8;
 
+      /* Legacy green tokens — kept so non-themed elements still resolve. */
       --green-50:   #f0faf3;
       --green-100:  #dcf2e1;
       --green-200:  #b6e3c2;
@@ -45,6 +50,29 @@
       --shadow-md: 0 1px 3px rgba(15,30,21,0.04), 0 4px 12px rgba(15,30,21,0.05);
       --radius:    12px;
       --radius-sm: 8px;
+
+      /* ============================================================
+         THEMED ACCENT VARIABLES — re-bound by JS when the sector
+         changes. Every accented surface in the dashboard reads from
+         these so a single switch repaints the whole interface.
+         Defaults below are the "All sectors" pastel-green palette.
+         ============================================================ */
+      --accent-50:   #ecf6e4;   /* very light fill */
+      --accent-100:  #d6ecc4;
+      --accent-200:  #b6dd9b;
+      --accent-300:  #8fc972;
+      --accent-400:  #61b04e;
+      --accent-500:  #3f9437;
+      --accent-600:  #2d7a2c;   /* primary accent */
+      --accent-700:  #205c22;   /* hover / strong */
+      --accent-800:  #143f17;
+      --accent-900:  #0a230d;   /* darkest text on light */
+      --accent-soft: #f3faec;
+      --accent-glow: rgba(45,122,44,0.22);
+
+      /* Chart-specific derivatives */
+      --accent-grid: #edf3eb;
+      --accent-line-bg: rgba(45,122,44,0.18);
     }
 
     /* ============================================================
@@ -63,9 +91,11 @@
       content: "";
       position: fixed; inset: 0;
       background:
-        radial-gradient(900px 600px at 85% -10%, rgba(45,143,85,0.06), transparent 60%),
-        radial-gradient(700px 500px at -10% 110%, rgba(45,143,85,0.04), transparent 60%);
+        radial-gradient(900px 600px at 85% -10%, var(--accent-glow), transparent 60%),
+        radial-gradient(700px 500px at -10% 110%, var(--accent-glow), transparent 60%);
+      opacity: 0.55;
       pointer-events: none; z-index: 0;
+      transition: background 0.45s ease;
     }
     .container {
       position: relative;
@@ -89,19 +119,21 @@
     .brand-mark {
       width: 36px; height: 36px;
       border-radius: 10px;
-      background: linear-gradient(135deg, var(--green-600), var(--green-500));
+      background: linear-gradient(135deg, var(--accent-700), var(--accent-500));
       display: grid; place-items: center;
-      box-shadow: 0 3px 10px rgba(25,122,71,0.22);
+      box-shadow: 0 3px 10px var(--accent-glow);
       color: white; font-size: 18px; font-weight: 700;
       flex-shrink: 0;
+      transition: background 0.35s ease, box-shadow 0.35s ease;
     }
     .brand h1 {
       font-family: 'Instrument Serif', Georgia, serif;
       font-size: 1.4rem;
       font-weight: 400;
       letter-spacing: -0.4px;
-      color: var(--green-900);
+      color: var(--accent-900);
       line-height: 1;
+      transition: color 0.35s ease;
     }
     .brand .subtitle {
       color: var(--text-muted);
@@ -119,14 +151,15 @@
       font-size: 0.8rem;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.15s ease;
+      transition: all 0.2s ease;
       width: 100%;
     }
-    .btn:hover { border-color: var(--green-500); color: var(--green-700); background: var(--green-50); }
+    .btn:hover { border-color: var(--accent-500); color: var(--accent-700); background: var(--accent-soft); }
     .btn-primary {
-      background: var(--green-600); color: white; border-color: var(--green-600);
+      background: var(--accent-600); color: white; border-color: var(--accent-600);
+      box-shadow: 0 1px 3px var(--accent-glow);
     }
-    .btn-primary:hover { background: var(--green-700); color: white; border-color: var(--green-700); }
+    .btn-primary:hover { background: var(--accent-700); color: white; border-color: var(--accent-700); }
 
     /* ============================================================
        MAIN GRID — left wider, right sidebar narrower
@@ -166,26 +199,30 @@
       position: relative;
       overflow: hidden;
       min-width: 0;
+      transition: border-color 0.3s ease;
     }
     .kpi-card::before {
       content: "";
       position: absolute; top: 0; left: 0; right: 0; height: 3px;
-      background: var(--green-600);
+      background: var(--accent-600);
+      transition: background 0.35s ease;
     }
-    .kpi-card.alt::before  { background: var(--amber-500); }
-    .kpi-card.alt2::before { background: var(--green-500); }
-    .kpi-card.alt3::before { background: var(--slate-500); }
+    .kpi-card.alt::before  { background: var(--accent-400); }
+    .kpi-card.alt2::before { background: var(--accent-500); }
+    .kpi-card.alt3::before { background: var(--accent-800); }
     .kpi-icon {
       width: 22px; height: 22px;
       border-radius: 6px;
-      background: var(--green-100);
-      color: var(--green-700);
+      background: var(--accent-50);
+      color: var(--accent-700);
       display: grid; place-items: center;
       margin-bottom: 6px;
       font-size: 12px;
+      transition: background 0.35s ease, color 0.35s ease;
     }
-    .kpi-card.alt  .kpi-icon { background: var(--amber-100); color: var(--amber-500); }
-    .kpi-card.alt3 .kpi-icon { background: var(--slate-100); color: var(--slate-500); }
+    .kpi-card.alt  .kpi-icon { background: var(--accent-100); color: var(--accent-700); }
+    .kpi-card.alt2 .kpi-icon { background: var(--accent-50);  color: var(--accent-600); }
+    .kpi-card.alt3 .kpi-icon { background: var(--accent-100); color: var(--accent-800); }
     .kpi-card .label {
       font-size: 0.65rem;
       text-transform: uppercase;
@@ -199,11 +236,12 @@
     .kpi-card .value {
       font-size: 1.35rem;
       font-weight: 700;
-      color: var(--green-900);
+      color: var(--accent-900);
       letter-spacing: -0.5px;
       margin-top: 2px;
       font-variant-numeric: tabular-nums;
       line-height: 1.1;
+      transition: color 0.35s ease;
     }
     .kpi-card .sub {
       font-size: 0.68rem;
@@ -229,9 +267,10 @@
     .card h2 {
       font-size: 0.85rem;
       font-weight: 700;
-      color: var(--green-900);
+      color: var(--accent-900);
       letter-spacing: -0.1px;
       line-height: 1.2;
+      transition: color 0.35s ease;
     }
     .card h2 small {
       color: var(--text-muted);
@@ -248,6 +287,50 @@
     }
 
     /* ============================================================
+       INSIGHT STRIP — dynamic analytical summary above the charts
+       ============================================================ */
+    .insight-strip {
+      background: linear-gradient(135deg, var(--accent-soft), var(--surface-soft));
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent-600);
+      border-radius: var(--radius);
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: var(--shadow-sm);
+      min-width: 0;
+      transition: background 0.35s ease, border-color 0.35s ease;
+    }
+    .insight-icon {
+      font-size: 14px;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .insight-label {
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: var(--accent-700);
+      font-weight: 700;
+      flex-shrink: 0;
+      padding-right: 10px;
+      border-right: 1px solid var(--border-strong);
+      transition: color 0.35s ease;
+    }
+    .insight-text {
+      font-size: 0.8rem;
+      color: var(--text);
+      line-height: 1.4;
+      min-width: 0;
+    }
+    .insight-text strong {
+      color: var(--accent-900);
+      font-weight: 700;
+    }
+    .insight-text .num { font-variant-numeric: tabular-nums; }
+
+    /* ============================================================
        CHART GRID — donut/table slightly narrower than bar/line
        ============================================================ */
     .chart-grid {
@@ -261,24 +344,299 @@
     .chart-wrap {
       position: relative;
       width: 100%;
-      height: 215px;
+      height: 205px;
     }
-    .chart-wrap.tall { height: 250px; }
+    .chart-wrap.tall { height: 235px; }
     .chart-wrap canvas { max-width: 100% !important; }
 
+    /* Scrollable variant — used by the bar chart so users can see all
+       countries while each bar keeps a comfortable height. */
+    .chart-wrap.scrollable {
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    .bar-inner {
+      width: 100%;
+      /* height is set by JS based on country count */
+    }
+
+    /* Sticky percentage scale — pinned to the top of the scrollable bar
+       chart so users always see the value reference while scrolling. */
+    .bar-sticky-axis {
+      position: sticky;
+      top: 0;
+      height: 22px;
+      background: #ffffff;
+      border-bottom: 1px solid var(--border);
+      z-index: 5;
+      pointer-events: none;
+    }
+    .bar-sticky-axis .tick {
+      position: absolute;
+      top: 5px;
+      transform: translateX(-50%);
+      font-size: 9.5px;
+      font-family: 'Manrope', sans-serif;
+      color: #5b6e63;
+      white-space: nowrap;
+    }
+    /* Subtle custom scrollbar (WebKit / Blink) */
+    .chart-wrap.scrollable::-webkit-scrollbar { width: 6px; }
+    .chart-wrap.scrollable::-webkit-scrollbar-track {
+      background: var(--surface-soft);
+      border-radius: 3px;
+    }
+    .chart-wrap.scrollable::-webkit-scrollbar-thumb {
+      background: var(--border-strong);
+      border-radius: 3px;
+    }
+    .chart-wrap.scrollable::-webkit-scrollbar-thumb:hover {
+      background: var(--accent-500);
+    }
+    /* Firefox */
+    .chart-wrap.scrollable {
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-strong) var(--surface-soft);
+    }
+
     /* ============================================================
-       MAP CARD
+       MAP CARD — custom EU-27 choropleth (replaces Datawrapper iframe)
        ============================================================ */
     .map-card { padding: 10px 12px 12px; }
-    .map-card iframe {
-      display: block;
+
+    .map-shell {
+      position: relative;
       width: 100%;
       height: 470px;
-      border: none;
       border-radius: 8px;
+      background: var(--surface-soft);
+      overflow: hidden;
+      transition: background 0.35s ease;
+    }
+    .map-shell svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: default;
+    }
+
+    /* Each country path. Fill is set inline by JS; we transition it for
+       smooth re-themes when the sector switches. */
+    .map-country {
+      stroke: #ffffff;
+      stroke-width: 0.65;
+      transition: fill 0.35s ease, stroke 0.2s ease, stroke-width 0.2s ease, opacity 0.2s ease;
+      cursor: default;
+      /* Keep borders thin regardless of zoom level */
+      vector-effect: non-scaling-stroke;
+    }
+    .map-country.eu27 { cursor: pointer; }
+    .map-country.eu27:hover {
+      stroke: var(--accent-900);
+      stroke-width: 1.4;
+    }
+    .map-country.no-data { fill: #c8cec3; }
+    .map-country.non-eu  { fill: #c8cec3; opacity: 1; }
+    .map-country.non-eu:hover {
+      fill: #b6bdb0;
+    }
+    /* Leader lines and label halos also stay constant width when zoomed */
+    .leader-layer line { vector-effect: non-scaling-stroke; }
+    .map-label, .map-label-noneu { vector-effect: non-scaling-stroke; }
+
+    /* Pan cursor on the SVG itself — drag to move the map around */
+    #mainMap { cursor: grab; }
+    #mainMap.zooming { cursor: grabbing; }
+
+    /* Zoom controls overlay — small stacked buttons at the top-right of
+       the map shell, mirroring conventional web-map UX. Plus, minus,
+       and a reset button that returns to the default view. */
+    .map-zoom-controls {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: flex;
+      flex-direction: column;
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid var(--border-strong);
+      border-radius: 7px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+      overflow: hidden;
+      z-index: 5;
+    }
+    .map-zoom-btn {
+      width: 26px;
+      height: 26px;
+      background: transparent;
+      color: var(--accent-700);
+      border: none;
+      border-bottom: 1px solid var(--border);
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      transition: background 0.15s ease, color 0.15s ease;
+      line-height: 1;
+    }
+    .map-zoom-btn:last-child { border-bottom: none; }
+    .map-zoom-btn:hover {
+      background: var(--accent-soft);
+      color: var(--accent-900);
+    }
+    .map-zoom-btn:active { background: var(--accent-100); }
+    .map-zoom-btn.reset {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .map-zoom-btn.reset:hover { color: var(--accent-700); }
+
+    /* Subtle hint shown when the user hovers the map for the first time
+       so they discover scroll-to-zoom + drag-to-pan. */
+    .map-hint {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.86);
+      padding: 3px 7px;
+      border-radius: 5px;
+      letter-spacing: 0.3px;
+      pointer-events: none;
+      opacity: 0;
       transition: opacity 0.25s ease;
+      z-index: 4;
+      border: 1px solid var(--border);
+    }
+    .map-shell:hover .map-hint { opacity: 0.95; }
+    .map-shell.zoomed .map-hint { opacity: 0; }
+
+    /* Country name + value labels positioned at each country's centroid. */
+    .map-label {
+      font-family: 'Manrope', sans-serif;
+      pointer-events: none;
+      text-anchor: middle;
+      dominant-baseline: middle;
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 2.4;
+      stroke-linejoin: round;
+    }
+    .map-label-name {
+      font-size: 8.2px;
+      font-weight: 700;
+      fill: var(--accent-900);
+    }
+    .map-label-value {
+      font-size: 7.6px;
+      font-weight: 600;
+      fill: var(--accent-700);
+      font-variant-numeric: tabular-nums;
+    }
+    .map-label-name.dark  { fill: #ffffff; stroke: rgba(0,0,0,0.25); stroke-width: 1.2; }
+    .map-label-value.dark { fill: #f3faec; stroke: rgba(0,0,0,0.25); stroke-width: 1.2; }
+
+    /* Non-EU geographic context labels — muted grey, uppercase, no
+       percentage. Modelled on the EU institutional reference map style
+       where surrounding countries appear in light grey with country
+       names in white-stroked dark grey type. */
+    .map-label-noneu {
+      font-size: 6.8px;
+      font-weight: 700;
+      fill: #5d635a;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      stroke: rgba(255,255,255,0.75);
+      stroke-width: 1.6;
+      paint-order: stroke fill;
+      pointer-events: none;
+    }
+    .map-label-noneu.lg {
+      font-size: 7.6px;
+    }
+
+    /* Tooltip — absolute-positioned, follows the cursor. */
+    .map-tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: var(--accent-900);
+      color: #ffffff;
+      padding: 8px 11px;
+      border-radius: 7px;
+      font-size: 0.74rem;
+      font-family: 'Manrope', sans-serif;
+      line-height: 1.45;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+      opacity: 0;
+      transform: translate(-50%, -110%);
+      transition: opacity 0.15s ease;
+      white-space: nowrap;
+      z-index: 10;
+      border-left: 3px solid var(--accent-400);
+    }
+    .map-tooltip.visible { opacity: 1; }
+    .map-tooltip .tt-country {
+      font-weight: 700;
+      font-size: 0.82rem;
+      letter-spacing: -0.1px;
+      margin-bottom: 2px;
+    }
+    .map-tooltip .tt-meta {
+      color: rgba(255,255,255,0.7);
+      font-size: 0.67rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .map-tooltip .tt-value {
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--accent-200);
+    }
+    .map-tooltip .tt-value.na { color: #d1d5d0; font-size: 0.78rem; }
+
+    /* Inline horizontal legend at the foot of the map. */
+    .map-legend {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 0.66rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .map-legend-bar {
+      flex: 1;
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--accent-50), var(--accent-300), var(--accent-600), var(--accent-800));
+      border: 1px solid var(--border);
+      transition: background 0.35s ease;
+    }
+    .map-legend-ticks {
+      display: flex;
+      justify-content: space-between;
+      font-variant-numeric: tabular-nums;
+      font-size: 0.62rem;
+      color: var(--text-soft);
+      margin-top: 2px;
+      letter-spacing: 0.3px;
+    }
+    .map-loading {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      letter-spacing: 0.4px;
       background: var(--surface-soft);
     }
+    .map-loading.hidden { display: none; }
 
     /* ============================================================
        FILTERS / SLICER
@@ -312,8 +670,8 @@
     }
     .filter-group select:focus {
       outline: none;
-      border-color: var(--green-600);
-      box-shadow: 0 0 0 3px rgba(25,122,71,0.12);
+      border-color: var(--accent-600);
+      box-shadow: 0 0 0 3px var(--accent-glow);
     }
 
     .range-slicer { width: 100%; }
@@ -335,8 +693,9 @@
     }
     .range-fill {
       position: absolute; top: 0; bottom: 0;
-      background: var(--green-600);
+      background: var(--accent-600);
       border-radius: 4px;
+      transition: background 0.35s ease;
     }
     .range-input {
       position: absolute; top: 0; left: 0; width: 100%; height: 20px;
@@ -350,16 +709,17 @@
       width: 16px; height: 16px;
       border-radius: 50%;
       background: white;
-      border: 2px solid var(--green-600);
+      border: 2px solid var(--accent-600);
       box-shadow: 0 1px 4px rgba(0,0,0,0.18);
       pointer-events: auto;
       cursor: grab;
+      transition: border-color 0.35s ease;
     }
     .range-input::-moz-range-thumb {
       width: 16px; height: 16px;
       border-radius: 50%;
       background: white;
-      border: 2px solid var(--green-600);
+      border: 2px solid var(--accent-600);
       box-shadow: 0 1px 4px rgba(0,0,0,0.18);
       pointer-events: auto;
       cursor: grab;
@@ -486,13 +846,25 @@
           </div>
         </section>
 
+        <!-- DYNAMIC INSIGHT STRIP -->
+        <section class="insight-strip">
+          <span class="insight-icon">✨</span>
+          <span class="insight-label">Key insight</span>
+          <span class="insight-text" id="insightText">–</span>
+        </section>
+
         <!-- TOP CHART ROW: Bar (wide) + Donut -->
         <section class="chart-grid">
           <div class="card">
             <div class="card-header">
               <h2>Renewable Share by Country <small id="barSubtitle"></small></h2>
             </div>
-            <div class="chart-wrap tall"><canvas id="barChart"></canvas></div>
+            <div class="chart-wrap tall scrollable">
+              <div class="bar-sticky-axis" id="barStickyAxis"></div>
+              <div class="bar-inner" id="barInner">
+                <canvas id="barChart"></canvas>
+              </div>
+            </div>
           </div>
           <div class="card">
             <div class="card-header">
@@ -527,18 +899,31 @@
       <!-- ====== RIGHT COLUMN ====== -->
       <div class="right-col">
 
-        <!-- MAP -->
+        <!-- MAP — custom EU-27 choropleth, fully data-driven -->
         <div class="card map-card">
           <div class="card-header">
             <h2>Geographic Overview <small id="mapSubtitle">Overall Renewable Energy Share</small></h2>
           </div>
-          <iframe
-            id="mainMap"
-            src="https://datawrapper.dwcdn.net/a1eFL/1/"
-            title="Renewable energy share map"
-            scrolling="no"
-            frameborder="0">
-          </iframe>
+          <div class="map-shell" id="mapShell">
+            <svg id="mainMap" viewBox="0 0 374 470" preserveAspectRatio="xMidYMid meet" aria-label="EU-27 renewable energy share choropleth"></svg>
+            <div class="map-tooltip" id="mapTooltip">
+              <div class="tt-country"></div>
+              <div class="tt-meta"></div>
+              <div class="tt-value"></div>
+            </div>
+            <div class="map-zoom-controls" role="group" aria-label="Map zoom controls">
+              <button class="map-zoom-btn" id="mapZoomIn"    aria-label="Zoom in"  title="Zoom in">+</button>
+              <button class="map-zoom-btn" id="mapZoomOut"   aria-label="Zoom out" title="Zoom out">−</button>
+              <button class="map-zoom-btn reset" id="mapZoomReset" aria-label="Reset view" title="Reset view">⟲</button>
+            </div>
+            <div class="map-hint" id="mapHint">Scroll to zoom · drag to pan</div>
+            <div class="map-loading" id="mapLoading">Loading EU-27 map…</div>
+          </div>
+          <div class="map-legend">
+            <span id="legendLow">0%</span>
+            <div class="map-legend-bar"></div>
+            <span id="legendHigh">100%</span>
+          </div>
         </div>
 
         <!-- FILTERS -->
@@ -580,7 +965,7 @@
     </div>
 
     <footer class="footer">
-      Data source: Eurostat — Share of energy from renewable sources (nrg_ind_ren). Built with HTML, CSS, JavaScript &amp; Chart.js.
+      Data source: Eurostat — Share of energy from renewable sources (nrg_ind_ren) · Geometry: Natural Earth via world-atlas. Built with HTML, CSS, JavaScript, Chart.js &amp; D3.
     </footer>
   </div>
 
@@ -595,6 +980,10 @@
     let DATA = {"All":[{"country":"European Union - 27 countries (from 2020)","values":{"2004":9.61,"2005":10.18,"2006":10.78,"2007":11.75,"2008":12.55,"2009":13.85,"2010":14.4,"2011":14.55,"2012":16.0,"2013":16.66,"2014":17.42,"2015":17.82,"2016":17.98,"2017":18.41,"2018":19.1,"2019":19.89,"2020":22.04,"2021":21.9,"2022":23.0,"2023":24.58,"2024":25.24}},{"country":"Belgium","values":{"2004":1.92,"2005":2.33,"2006":2.66,"2007":3.14,"2008":3.61,"2009":4.75,"2010":6.0,"2011":6.3,"2012":7.09,"2013":7.67,"2014":8.04,"2015":8.06,"2016":8.74,"2017":9.14,"2018":9.47,"2019":9.93,"2020":13.0,"2021":13.02,"2022":13.83,"2023":14.67,"2024":14.34}},{"country":"Bulgaria","values":{"2004":9.23,"2005":9.17,"2006":9.41,"2007":9.1,"2008":10.35,"2009":12.01,"2010":13.93,"2011":14.15,"2012":15.84,"2013":18.9,"2014":18.05,"2015":18.26,"2016":18.76,"2017":18.7,"2018":20.58,"2019":21.55,"2020":23.32,"2021":19.39,"2022":19.08,"2023":23.15,"2024":23.21}},{"country":"Czechia","values":{"2004":6.77,"2005":7.11,"2006":7.36,"2007":7.89,"2008":8.67,"2009":9.98,"2010":10.51,"2011":10.95,"2012":12.81,"2013":13.93,"2014":15.07,"2015":15.07,"2016":14.93,"2017":14.8,"2018":15.14,"2019":16.24,"2020":17.3,"2021":17.61,"2022":18.12,"2023":18.55,"2024":19.21}},{"country":"Denmark","values":{"2004":14.84,"2005":15.96,"2006":16.33,"2007":17.75,"2008":18.54,"2009":19.95,"2010":21.89,"2011":23.39,"2012":25.46,"2013":27.17,"2014":29.31,"2015":30.47,"2016":31.71,"2017":34.39,"2018":35.16,"2019":37.02,"2020":31.68,"2021":41.49,"2022":41.37,"2023":43.73,"2024":46.46}},{"country":"Germany","values":{"2004":6.21,"2005":7.17,"2006":8.47,"2007":10.04,"2008":10.07,"2009":10.85,"2010":11.67,"2011":12.47,"2012":13.55,"2013":13.76,"2014":14.38,"2015":14.9,"2016":14.88,"2017":15.47,"2018":16.66,"2019":17.27,"2020":19.09,"2021":19.3,"2022":20.83,"2023":21.51,"2024":22.47}},{"country":"Estonia","values":{"2004":18.42,"2005":17.48,"2006":16.01,"2007":17.14,"2008":18.81,"2009":23.01,"2010":24.57,"2011":25.52,"2012":25.59,"2013":25.36,"2014":26.13,"2015":28.99,"2016":29.23,"2017":29.54,"2018":29.97,"2019":31.73,"2020":30.07,"2021":37.34,"2022":38.54,"2023":40.95,"2024":42.23}},{"country":"Ireland","values":{"2004":2.38,"2005":2.82,"2006":3.07,"2007":3.5,"2008":3.98,"2009":5.24,"2010":5.75,"2011":6.61,"2012":7.03,"2013":7.52,"2014":8.52,"2015":9.08,"2016":9.19,"2017":10.52,"2018":10.94,"2019":11.98,"2020":16.16,"2021":12.95,"2022":13.02,"2023":15.24,"2024":16.06}},{"country":"Greece","values":{"2004":7.16,"2005":7.28,"2006":7.46,"2007":8.25,"2008":8.18,"2009":8.73,"2010":10.08,"2011":11.15,"2012":13.74,"2013":15.33,"2014":15.68,"2015":15.69,"2016":15.39,"2017":17.3,"2018":18.0,"2019":19.63,"2020":21.75,"2021":22.0,"2022":22.67,"2023":25.27,"2024":25.36}},{"country":"Spain","values":{"2004":8.35,"2005":8.44,"2006":9.16,"2007":9.67,"2008":10.74,"2009":12.96,"2010":13.78,"2011":13.18,"2012":14.24,"2013":15.08,"2014":15.88,"2015":16.22,"2016":17.02,"2017":17.12,"2018":17.02,"2019":17.85,"2020":21.22,"2021":20.55,"2022":21.84,"2023":24.98,"2024":25.42}},{"country":"France","values":{"2004":9.32,"2005":9.27,"2006":8.94,"2007":9.43,"2008":11.19,"2009":12.21,"2010":12.67,"2011":10.81,"2012":13.24,"2013":13.88,"2014":14.36,"2015":14.8,"2016":15.45,"2017":15.85,"2018":16.38,"2019":17.17,"2020":19.11,"2021":19.39,"2022":20.33,"2023":22.46,"2024":23.23}},{"country":"Croatia","values":{"2004":23.4,"2005":23.69,"2006":22.67,"2007":22.16,"2008":21.99,"2009":23.6,"2010":25.1,"2011":25.39,"2012":26.76,"2013":28.04,"2014":27.82,"2015":28.97,"2016":28.27,"2017":27.28,"2018":28.05,"2019":28.47,"2020":31.02,"2021":31.29,"2022":28.09,"2023":28.09,"2024":26.48}},{"country":"Italy","values":{"2004":6.32,"2005":7.55,"2006":8.33,"2007":9.81,"2008":11.49,"2009":12.78,"2010":13.02,"2011":12.88,"2012":15.44,"2013":16.74,"2014":17.08,"2015":17.52,"2016":17.41,"2017":18.27,"2018":17.8,"2019":18.18,"2020":20.36,"2021":18.89,"2022":18.83,"2023":19.18,"2024":19.39}},{"country":"Cyprus","values":{"2004":3.07,"2005":3.13,"2006":3.26,"2007":4.0,"2008":5.13,"2009":5.92,"2010":6.16,"2011":6.25,"2012":7.11,"2013":8.43,"2014":9.14,"2015":9.9,"2016":9.83,"2017":10.48,"2018":13.87,"2019":13.78,"2020":16.88,"2021":19.07,"2022":19.43,"2023":20.21,"2024":20.84}},{"country":"Latvia","values":{"2004":32.79,"2005":32.26,"2006":31.14,"2007":29.61,"2008":29.81,"2009":34.32,"2010":30.38,"2011":33.48,"2012":35.71,"2013":37.04,"2014":38.63,"2015":37.54,"2016":37.14,"2017":39.01,"2018":40.02,"2019":40.93,"2020":42.13,"2021":42.11,"2022":43.79,"2023":43.25,"2024":45.53}},{"country":"Lithuania","values":{"2004":17.22,"2005":16.77,"2006":16.89,"2007":16.48,"2008":17.82,"2009":19.8,"2010":19.64,"2011":19.94,"2012":21.44,"2013":22.69,"2014":23.59,"2015":25.75,"2016":25.61,"2017":26.04,"2018":24.7,"2019":25.47,"2020":26.77,"2021":28.17,"2022":29.6,"2023":31.93,"2024":35.41}},{"country":"Luxembourg","values":{"2004":0.9,"2005":1.4,"2006":1.47,"2007":2.73,"2008":2.81,"2009":2.93,"2010":2.85,"2011":2.85,"2012":3.11,"2013":3.49,"2014":4.47,"2015":4.99,"2016":5.36,"2017":6.19,"2018":8.94,"2019":7.05,"2020":11.7,"2021":11.71,"2022":14.29,"2023":14.31,"2024":14.74}},{"country":"Hungary","values":{"2004":4.36,"2005":6.93,"2006":7.43,"2007":8.57,"2008":8.56,"2009":11.67,"2010":12.74,"2011":13.97,"2012":15.53,"2013":16.2,"2014":14.62,"2015":14.49,"2016":14.38,"2017":13.56,"2018":12.55,"2019":12.63,"2020":13.85,"2021":14.13,"2022":15.13,"2023":17.12,"2024":18.26}},{"country":"Malta","values":{"2004":0.1,"2005":0.12,"2006":0.15,"2007":0.18,"2008":0.2,"2009":0.22,"2010":0.98,"2011":1.85,"2012":2.86,"2013":3.76,"2014":4.74,"2015":5.12,"2016":6.21,"2017":7.22,"2018":7.91,"2019":8.23,"2020":10.71,"2021":12.63,"2022":14.04,"2023":15.44,"2024":17.21}},{"country":"Netherlands","values":{"2004":2.03,"2005":2.48,"2006":2.78,"2007":3.3,"2008":3.6,"2009":4.27,"2010":3.92,"2011":4.52,"2012":4.66,"2013":4.69,"2014":5.42,"2015":5.71,"2016":5.85,"2017":6.51,"2018":7.39,"2019":8.89,"2020":14.0,"2021":13.12,"2022":15.29,"2023":17.59,"2024":20.18}},{"country":"Austria","values":{"2004":22.55,"2005":24.35,"2006":26.28,"2007":28.14,"2008":28.79,"2009":31.04,"2010":31.2,"2011":31.55,"2012":32.73,"2013":32.66,"2014":33.55,"2015":33.5,"2016":33.37,"2017":33.14,"2018":33.78,"2019":33.76,"2020":36.55,"2021":34.64,"2022":34.06,"2023":41.6,"2024":42.95}},{"country":"Poland","values":{"2004":6.88,"2005":6.87,"2006":6.86,"2007":6.9,"2008":7.69,"2009":8.68,"2010":9.28,"2011":10.34,"2012":10.96,"2013":11.45,"2014":11.61,"2015":11.88,"2016":11.4,"2017":11.06,"2018":14.94,"2019":15.38,"2020":16.1,"2021":15.6,"2022":16.64,"2023":16.65,"2024":17.77}},{"country":"Portugal","values":{"2004":19.2,"2005":19.52,"2006":20.79,"2007":21.91,"2008":22.93,"2009":24.41,"2010":24.15,"2011":24.6,"2012":24.57,"2013":25.7,"2014":29.51,"2015":30.51,"2016":30.86,"2017":30.61,"2018":30.2,"2019":30.62,"2020":33.98,"2021":33.98,"2022":34.67,"2023":35.15,"2024":36.32}},{"country":"Romania","values":{"2004":16.81,"2005":17.57,"2006":17.1,"2007":18.2,"2008":20.2,"2009":22.16,"2010":22.83,"2011":21.74,"2012":22.82,"2013":23.89,"2014":24.84,"2015":24.79,"2016":25.03,"2017":24.45,"2018":23.88,"2019":24.29,"2020":24.48,"2021":23.87,"2022":24.23,"2023":25.76,"2024":25.38}},{"country":"Slovenia","values":{"2004":18.4,"2005":19.81,"2006":18.42,"2007":19.68,"2008":18.65,"2009":20.77,"2010":21.08,"2011":20.94,"2012":21.55,"2013":23.16,"2014":22.46,"2015":22.88,"2016":21.98,"2017":21.66,"2018":21.38,"2019":21.97,"2020":25.0,"2021":25.0,"2022":25.0,"2023":25.07,"2024":25.0}},{"country":"Slovakia","values":{"2004":6.39,"2005":6.36,"2006":6.58,"2007":7.77,"2008":7.72,"2009":9.37,"2010":9.1,"2011":10.35,"2012":10.45,"2013":10.13,"2014":11.71,"2015":12.88,"2016":12.03,"2017":11.46,"2018":11.9,"2019":16.89,"2020":17.34,"2021":17.42,"2022":17.48,"2023":16.99,"2024":18.09}},{"country":"Finland","values":{"2004":29.23,"2005":28.81,"2006":30.04,"2007":29.56,"2008":31.07,"2009":31.05,"2010":32.17,"2011":32.53,"2012":34.22,"2013":36.63,"2014":38.63,"2015":39.23,"2016":38.94,"2017":40.86,"2018":41.19,"2019":42.81,"2020":43.94,"2021":42.82,"2022":47.74,"2023":50.78,"2024":52.12}},{"country":"Sweden","values":{"2004":38.43,"2005":39.98,"2006":41.73,"2007":43.22,"2008":43.92,"2009":47.02,"2010":46.1,"2011":47.63,"2012":49.4,"2013":50.15,"2014":51.15,"2015":52.22,"2016":52.6,"2017":53.39,"2018":53.92,"2019":55.78,"2020":60.12,"2021":62.53,"2022":66.29,"2023":66.39,"2024":62.85}},{"country":"Iceland","values":{"2004":58.9,"2005":60.27,"2006":60.92,"2007":71.92,"2008":67.98,"2009":70.24,"2010":70.91,"2011":72.3,"2012":73.73,"2013":73.79,"2014":73.04,"2015":71.95,"2016":75.33,"2017":74.1,"2018":77.17,"2019":78.61,"2020":83.72,"2021":79.62,"2022":78.73,"2023":79.44,"2024":79.33}},{"country":"Norway","values":{"2004":58.42,"2005":60.07,"2006":60.52,"2007":60.4,"2008":62.0,"2009":65.07,"2010":61.89,"2011":64.64,"2012":64.93,"2013":66.48,"2014":68.41,"2015":68.55,"2016":69.23,"2017":70.04,"2018":71.57,"2019":74.41,"2020":77.36,"2021":75.04,"2022":76.78,"2023":76.73,"2024":77.93}},{"country":"Bosnia and Herzegovina","values":{"2004":null,"2005":null,"2006":null,"2007":null,"2008":null,"2009":null,"2010":null,"2011":null,"2012":null,"2013":null,"2014":24.87,"2015":26.61,"2016":25.36,"2017":23.24,"2018":35.97,"2019":37.45,"2020":39.84,"2021":36.56,"2022":39.29,"2023":40.01,"2024":null}},{"country":"Montenegro","values":{"2004":null,"2005":35.69,"2006":34.84,"2007":32.92,"2008":32.29,"2009":39.37,"2010":40.64,"2011":40.65,"2012":41.51,"2013":43.7,"2014":44.1,"2015":43.07,"2016":41.53,"2017":39.69,"2018":38.8,"2019":37.72,"2020":43.77,"2021":39.89,"2022":41.06,"2023":40.88,"2024":40.82}},{"country":"Moldova","values":{"2004":7.45,"2005":6.4,"2006":6.96,"2007":6.44,"2008":6.99,"2009":7.92,"2010":21.37,"2011":22.08,"2012":24.33,"2013":24.42,"2014":26.17,"2015":26.17,"2016":26.89,"2017":27.84,"2018":27.48,"2019":23.84,"2020":25.06,"2021":22.2,"2022":21.54,"2023":23.0,"2024":20.77}},{"country":"North Macedonia","values":{"2004":15.7,"2005":16.47,"2006":16.53,"2007":14.98,"2008":15.55,"2009":17.24,"2010":16.45,"2011":16.41,"2012":18.13,"2013":18.51,"2014":19.56,"2015":19.53,"2016":18.04,"2017":19.64,"2018":18.18,"2019":17.48,"2020":19.22,"2021":19.11,"2022":20.01,"2023":20.21,"2024":21.81}},{"country":"Georgia","values":{"2004":null,"2005":null,"2006":null,"2007":null,"2008":null,"2009":null,"2010":null,"2011":null,"2012":null,"2013":null,"2014":null,"2015":null,"2016":null,"2017":null,"2018":null,"2019":null,"2020":null,"2021":18.29,"2022":18.14,"2023":19.85,"2024":19.45}},{"country":"Albania","values":{"2004":29.62,"2005":31.37,"2006":32.07,"2007":32.66,"2008":32.45,"2009":31.44,"2010":31.87,"2011":31.19,"2012":35.15,"2013":33.17,"2014":31.86,"2015":34.91,"2016":36.95,"2017":35.78,"2018":36.57,"2019":38.04,"2020":45.02,"2021":41.39,"2022":44.08,"2023":46.62,"2024":43.11}},{"country":"Serbia","values":{"2004":12.72,"2005":14.26,"2006":14.54,"2007":14.33,"2008":15.89,"2009":21.02,"2010":19.76,"2011":19.12,"2012":20.79,"2013":21.09,"2014":22.86,"2015":21.99,"2016":21.15,"2017":20.29,"2018":20.32,"2019":21.44,"2020":26.3,"2021":25.25,"2022":24.67,"2023":25.43,"2024":25.86}},{"country":"Kosovo*","values":{"2004":20.54,"2005":19.77,"2006":19.51,"2007":18.81,"2008":18.43,"2009":18.23,"2010":18.23,"2011":17.6,"2012":18.62,"2013":18.82,"2014":19.54,"2015":18.48,"2016":24.47,"2017":23.08,"2018":24.62,"2019":24.21,"2020":24.4,"2021":22.06,"2022":18.77,"2023":20.21,"2024":18.02}}],"Transport":[{"country":"European Union - 27 countries (from 2020)","values":{"2004":1.43,"2005":1.82,"2006":2.47,"2007":2.89,"2008":4.13,"2009":4.89,"2010":5.5,"2011":4.12,"2012":5.77,"2013":6.07,"2014":6.55,"2015":6.75,"2016":7.17,"2017":7.47,"2018":8.27,"2019":8.8,"2020":10.25,"2021":9.05,"2022":9.64,"2023":10.96,"2024":11.2}},{"country":"Belgium","values":{"2004":0.64,"2005":0.66,"2006":0.68,"2007":0.67,"2008":0.71,"2009":2.19,"2010":4.8,"2011":4.8,"2012":4.91,"2013":5.09,"2014":5.84,"2015":3.92,"2016":6.03,"2017":6.64,"2018":6.71,"2019":6.82,"2020":11.04,"2021":10.33,"2022":10.47,"2023":12.18,"2024":12.72}},{"country":"Bulgaria","values":{"2004":0.97,"2005":0.88,"2006":1.05,"2007":0.96,"2008":0.94,"2009":1.09,"2010":1.5,"2011":0.9,"2012":0.65,"2013":5.89,"2014":5.74,"2015":6.49,"2016":7.2,"2017":7.27,"2018":8.08,"2019":7.89,"2020":9.1,"2021":7.61,"2022":7.66,"2023":8.09,"2024":8.2}},{"country":"Czechia","values":{"2004":1.2,"2005":1.1,"2006":1.07,"2007":1.05,"2008":2.84,"2009":4.31,"2010":5.22,"2011":1.28,"2012":6.25,"2013":6.45,"2014":7.0,"2015":6.54,"2016":6.5,"2017":6.62,"2018":6.56,"2019":7.84,"2020":9.38,"2021":6.74,"2022":6.24,"2023":5.65,"2024":5.74}},{"country":"Denmark","values":{"2004":0.45,"2005":0.44,"2006":0.52,"2007":0.54,"2008":0.54,"2009":0.69,"2010":1.15,"2011":3.61,"2012":6.28,"2013":6.46,"2014":6.56,"2015":6.43,"2016":6.73,"2017":6.93,"2018":6.92,"2019":7.11,"2020":9.7,"2021":10.06,"2022":9.98,"2023":11.13,"2024":14.12}},{"country":"Germany","values":{"2004":2.14,"2005":3.95,"2006":6.7,"2007":7.53,"2008":6.32,"2009":5.88,"2010":6.41,"2011":6.46,"2012":7.32,"2013":7.3,"2014":6.9,"2015":6.57,"2016":7.01,"2017":7.03,"2018":7.94,"2019":7.63,"2020":10.01,"2021":8.1,"2022":10.07,"2023":12.26,"2024":12.37}},{"country":"Estonia","values":{"2004":0.2,"2005":0.23,"2006":0.18,"2007":0.17,"2008":0.18,"2009":0.44,"2010":0.43,"2011":0.45,"2012":0.45,"2013":0.45,"2014":0.42,"2015":0.41,"2016":0.43,"2017":0.42,"2018":3.31,"2019":6.24,"2020":12.16,"2021":11.19,"2022":8.53,"2023":9.06,"2024":7.71}},{"country":"Ireland","values":{"2004":0.04,"2005":0.07,"2006":0.1,"2007":0.5,"2008":1.3,"2009":1.96,"2010":2.49,"2011":3.84,"2012":4.04,"2013":4.9,"2014":5.2,"2015":5.94,"2016":5.16,"2017":7.44,"2018":7.19,"2019":8.92,"2020":10.19,"2021":4.65,"2022":5.83,"2023":7.59,"2024":8.66}},{"country":"Greece","values":{"2004":0.09,"2005":0.06,"2006":0.73,"2007":1.27,"2008":1.06,"2009":1.1,"2010":1.92,"2011":0.6,"2012":0.9,"2013":0.98,"2014":1.33,"2015":1.1,"2016":1.62,"2017":4.0,"2018":4.11,"2019":4.05,"2020":5.34,"2021":4.41,"2022":4.08,"2023":3.94,"2024":3.87}},{"country":"Spain","values":{"2004":1.03,"2005":1.27,"2006":0.84,"2007":1.38,"2008":2.17,"2009":3.71,"2010":5.02,"2011":0.77,"2012":0.87,"2013":0.95,"2014":1.02,"2015":1.09,"2016":5.17,"2017":5.8,"2018":6.94,"2019":7.61,"2020":9.53,"2021":9.21,"2022":9.68,"2023":11.96,"2024":11.3}},{"country":"France","values":{"2004":0.78,"2005":0.78,"2006":0.79,"2007":0.83,"2008":6.25,"2009":6.65,"2010":6.58,"2011":0.99,"2012":7.41,"2013":7.6,"2014":8.25,"2015":8.37,"2016":8.4,"2017":8.77,"2018":8.96,"2019":9.25,"2020":9.21,"2021":8.11,"2022":8.94,"2023":9.94,"2024":10.79}},{"country":"Croatia","values":{"2004":0.99,"2005":1.02,"2006":1.0,"2007":1.12,"2008":1.07,"2009":1.29,"2010":1.12,"2011":1.03,"2012":1.05,"2013":2.71,"2014":2.65,"2015":2.36,"2016":1.22,"2017":1.17,"2018":2.58,"2019":5.86,"2020":6.59,"2021":6.99,"2022":2.4,"2023":0.92,"2024":0.94}},{"country":"Italy","values":{"2004":1.21,"2005":1.05,"2006":0.99,"2007":0.96,"2008":2.62,"2009":4.0,"2010":4.92,"2011":5.06,"2012":6.16,"2013":5.41,"2014":5.02,"2015":6.5,"2016":7.41,"2017":6.48,"2018":7.66,"2019":9.05,"2020":10.74,"2021":9.87,"2022":10.05,"2023":10.44,"2024":9.95}},{"country":"Cyprus","values":{"2004":0.0,"2005":0.0,"2006":0.0,"2007":0.0,"2008":1.92,"2009":2.04,"2010":1.99,"2011":0.0,"2012":0.0,"2013":1.13,"2014":2.68,"2015":2.52,"2016":2.67,"2017":2.56,"2018":2.66,"2019":3.32,"2020":7.4,"2021":7.19,"2022":7.23,"2023":7.29,"2024":7.39}},{"country":"Latvia","values":{"2004":2.14,"2005":2.39,"2006":2.17,"2007":1.67,"2008":1.69,"2009":1.89,"2010":3.98,"2011":4.09,"2012":4.0,"2013":4.03,"2014":4.08,"2015":3.64,"2016":2.45,"2017":2.27,"2018":4.73,"2019":4.55,"2020":6.73,"2021":6.44,"2022":3.12,"2023":1.36,"2024":8.78}},{"country":"Lithuania","values":{"2004":0.45,"2005":0.66,"2006":1.91,"2007":3.82,"2008":4.32,"2009":4.48,"2010":3.79,"2011":3.83,"2012":4.97,"2013":4.83,"2014":4.36,"2015":4.58,"2016":3.65,"2017":4.3,"2018":4.33,"2019":4.05,"2020":5.51,"2021":6.47,"2022":6.68,"2023":7.23,"2024":8.98}},{"country":"Luxembourg","values":{"2004":0.14,"2005":0.16,"2006":0.19,"2007":2.2,"2008":2.17,"2009":2.23,"2010":2.09,"2011":2.36,"2012":2.83,"2013":4.07,"2014":5.55,"2015":6.7,"2016":5.96,"2017":6.48,"2018":6.6,"2019":7.71,"2020":12.58,"2021":7.97,"2022":8.71,"2023":9.12,"2024":9.46}},{"country":"Hungary","values":{"2004":1.02,"2005":1.01,"2006":1.22,"2007":1.63,"2008":5.18,"2009":5.89,"2010":6.16,"2011":6.17,"2012":6.0,"2013":6.34,"2014":7.0,"2015":7.17,"2016":7.77,"2017":7.73,"2018":7.75,"2019":8.06,"2020":11.57,"2021":6.17,"2022":7.77,"2023":7.58,"2024":7.92}},{"country":"Malta","values":{"2004":0.0,"2005":0.0,"2006":0.0,"2007":0.0,"2008":0.0,"2009":0.0,"2010":0.0,"2011":2.02,"2012":3.22,"2013":3.48,"2014":4.67,"2015":4.68,"2016":5.27,"2017":6.83,"2018":8.02,"2019":8.9,"2020":10.59,"2021":10.52,"2022":10.47,"2023":10.75,"2024":11.35}},{"country":"Netherlands","values":{"2004":0.52,"2005":0.5,"2006":0.85,"2007":3.18,"2008":2.98,"2009":4.57,"2010":3.4,"2011":5.07,"2012":5.22,"2013":5.34,"2014":6.56,"2015":5.6,"2016":4.76,"2017":5.84,"2018":9.48,"2019":12.33,"2020":12.63,"2021":9.28,"2022":11.16,"2023":13.51,"2024":19.75}},{"country":"Austria","values":{"2004":4.53,"2005":5.07,"2006":7.53,"2007":8.24,"2008":9.56,"2009":11.18,"2010":10.71,"2011":10.08,"2012":10.03,"2013":9.7,"2014":10.98,"2015":11.41,"2016":10.58,"2017":9.7,"2018":9.93,"2019":10.05,"2020":10.28,"2021":9.65,"2022":10.75,"2023":13.58,"2024":14.59}},{"country":"Poland","values":{"2004":1.58,"2005":1.75,"2006":1.82,"2007":1.75,"2008":4.14,"2009":5.41,"2010":6.64,"2011":6.92,"2012":6.53,"2013":6.67,"2014":6.32,"2015":5.69,"2016":3.97,"2017":4.23,"2018":5.72,"2019":6.2,"2020":6.58,"2021":5.67,"2022":5.79,"2023":6.34,"2024":6.03}},{"country":"Portugal","values":{"2004":0.42,"2005":0.45,"2006":1.63,"2007":2.43,"2008":2.52,"2009":3.88,"2010":5.55,"2011":0.69,"2012":0.81,"2013":0.93,"2014":3.67,"2015":7.43,"2016":7.65,"2017":7.91,"2018":9.04,"2019":9.09,"2020":9.7,"2021":8.61,"2022":8.71,"2023":11.16,"2024":14.33}},{"country":"Romania","values":{"2004":1.82,"2005":1.87,"2006":1.54,"2007":1.64,"2008":1.34,"2009":1.3,"2010":1.37,"2011":5.54,"2012":4.96,"2013":5.45,"2014":4.67,"2015":5.49,"2016":6.17,"2017":6.56,"2018":6.34,"2019":7.85,"2020":8.54,"2021":8.92,"2022":8.92,"2023":8.39,"2024":8.39}},{"country":"Slovenia","values":{"2004":0.85,"2005":0.83,"2006":1.06,"2007":1.47,"2008":1.77,"2009":2.25,"2010":3.12,"2011":2.48,"2012":3.25,"2013":3.77,"2014":2.88,"2015":2.24,"2016":1.6,"2017":2.57,"2018":5.48,"2019":7.98,"2020":10.91,"2021":10.64,"2022":7.83,"2023":10.02,"2024":9.24}},{"country":"Slovakia","values":{"2004":1.5,"2005":1.66,"2006":3.29,"2007":3.99,"2008":4.28,"2009":5.36,"2010":5.29,"2011":5.73,"2012":5.6,"2013":6.21,"2014":7.95,"2015":8.63,"2016":7.76,"2017":6.95,"2018":6.99,"2019":8.31,"2020":9.26,"2021":8.76,"2022":8.93,"2023":9.18,"2024":9.61}},{"country":"Finland","values":{"2004":1.01,"2005":0.91,"2006":0.96,"2007":1.02,"2008":2.91,"2009":4.56,"2010":4.39,"2011":1.0,"2012":1.05,"2013":10.66,"2014":24.12,"2015":24.57,"2016":8.82,"2017":18.68,"2018":14.77,"2019":14.85,"2020":14.31,"2021":20.3,"2022":18.54,"2023":20.3,"2024":20.33}},{"country":"Sweden","values":{"2004":6.29,"2005":6.6,"2006":7.51,"2007":8.42,"2008":8.69,"2009":9.36,"2010":9.63,"2011":11.94,"2012":13.78,"2013":15.31,"2014":18.83,"2015":21.49,"2016":26.56,"2017":26.84,"2018":29.7,"2019":30.31,"2020":31.85,"2021":28.68,"2022":28.84,"2023":33.65,"2024":26.4}},{"country":"Iceland","values":{"2004":0.0,"2005":0.0,"2006":0.0,"2007":0.07,"2008":0.11,"2009":0.14,"2010":0.19,"2011":0.87,"2012":1.34,"2013":2.04,"2014":2.26,"2015":6.09,"2016":6.3,"2017":7.0,"2018":8.4,"2019":9.29,"2020":11.96,"2021":12.56,"2022":13.67,"2023":15.7,"2024":11.19}},{"country":"Norway","values":{"2004":3.1,"2005":3.07,"2006":3.31,"2007":3.74,"2008":5.29,"2009":5.57,"2010":5.39,"2011":2.68,"2012":3.01,"2013":3.19,"2014":6.16,"2015":7.71,"2016":13.76,"2017":19.23,"2018":20.32,"2019":25.67,"2020":28.69,"2021":25.53,"2022":28.87,"2023":32.87,"2024":33.57}},{"country":"Bosnia and Herzegovina","values":{"2004":null,"2005":null,"2006":null,"2007":null,"2008":null,"2009":null,"2010":null,"2011":null,"2012":null,"2013":null,"2014":0.46,"2015":0.53,"2016":0.53,"2017":0.53,"2018":0.44,"2019":0.4,"2020":0.46,"2021":0.24,"2022":0.31,"2023":0.29,"2024":null}},{"country":"Montenegro","values":{"2004":null,"2005":0.5,"2006":0.51,"2007":1.0,"2008":0.88,"2009":0.7,"2010":0.79,"2011":0.61,"2012":0.74,"2013":1.1,"2014":1.07,"2015":1.19,"2016":1.1,"2017":0.95,"2018":0.86,"2019":0.86,"2020":0.63,"2021":0.28,"2022":0.35,"2023":0.34,"2024":0.29}},{"country":"Moldova","values":{"2004":15.87,"2005":15.87,"2006":15.87,"2007":16.4,"2008":16.89,"2009":17.66,"2010":0.13,"2011":0.15,"2012":0.19,"2013":0.21,"2014":0.18,"2015":0.18,"2016":0.24,"2017":0.32,"2018":0.28,"2019":0.17,"2020":0.18,"2021":0.02,"2022":0.02,"2023":0.02,"2024":0.06}},{"country":"North Macedonia","values":{"2004":0.2,"2005":0.24,"2006":0.28,"2007":0.28,"2008":0.28,"2009":0.23,"2010":0.2,"2011":0.17,"2012":0.19,"2013":0.18,"2014":0.21,"2015":0.18,"2016":0.14,"2017":0.14,"2018":0.12,"2019":0.14,"2020":0.15,"2021":0.06,"2022":0.05,"2023":0.0,"2024":0.0}},{"country":"Georgia","values":{"2004":null,"2005":null,"2006":null,"2007":null,"2008":null,"2009":null,"2010":null,"2011":null,"2012":null,"2013":null,"2014":null,"2015":null,"2016":null,"2017":null,"2018":null,"2019":null,"2020":null,"2021":0.9,"2022":1.11,"2023":1.08,"2024":1.22}},{"country":"Albania","values":{"2004":0.1,"2005":0.1,"2006":0.0,"2007":0.0,"2008":0.0,"2009":0.0,"2010":0.0,"2011":0.0,"2012":0.0,"2013":0.0,"2014":0.0,"2015":0.0,"2016":0.0,"2017":0.0,"2018":0.0,"2019":0.2,"2020":0.35,"2021":0.34,"2022":0.4,"2023":0.46,"2024":0.22}},{"country":"Serbia","values":{"2004":0.45,"2005":0.45,"2006":0.43,"2007":0.67,"2008":0.68,"2009":1.47,"2010":0.67,"2011":1.88,"2012":2.0,"2013":1.68,"2014":1.17,"2015":1.18,"2016":1.23,"2017":1.21,"2018":1.19,"2019":1.14,"2020":1.17,"2021":0.62,"2022":0.6,"2023":0.6,"2024":0.59}},{"country":"Kosovo*","values":{"2004":0.0,"2005":0.0,"2006":0.0,"2007":0.0,"2008":0.0,"2009":0.0,"2010":0.0,"2011":0.0,"2012":0.0,"2013":0.0,"2014":0.0,"2015":0.0,"2016":0.0,"2017":0.0,"2018":0.0,"2019":0.0,"2020":0.0,"2021":0.0,"2022":0.0,"2023":0.0,"2024":0.0}}],"Heating&Cooling":[{"country":"European Union - 27 countries (from 2020)","values":{"2004":11.73,"2005":12.44,"2006":13.21,"2007":14.82,"2008":15.32,"2009":16.79,"2010":17.0,"2011":17.41,"2012":18.58,"2013":19.04,"2014":19.93,"2015":20.31,"2016":20.4,"2017":20.82,"2018":21.6,"2019":22.43,"2020":22.98,"2021":23.03,"2022":24.77,"2023":26.23,"2024":26.74}},{"country":"Belgium","values":{"2004":2.93,"2005":3.42,"2006":3.81,"2007":4.71,"2008":5.12,"2009":6.09,"2010":6.71,"2011":6.72,"2012":7.11,"2013":7.64,"2014":7.75,"2015":7.94,"2016":8.25,"2017":8.2,"2018":8.29,"2019":8.32,"2020":8.45,"2021":9.21,"2022":10.43,"2023":11.21,"2024":11.26}},{"country":"Bulgaria","values":{"2004":14.06,"2005":14.26,"2006":14.79,"2007":13.86,"2008":17.26,"2009":21.64,"2010":24.33,"2011":24.77,"2012":27.24,"2013":29.23,"2014":28.52,"2015":28.9,"2016":29.99,"2017":29.85,"2018":33.25,"2019":35.42,"2020":37.18,"2021":29.86,"2022":31.48,"2023":36.06,"2024":34.19}},{"country":"Czechia","values":{"2004":9.92,"2005":10.84,"2006":11.23,"2007":12.37,"2008":12.92,"2009":14.26,"2010":14.1,"2011":15.39,"2012":16.25,"2013":17.71,"2014":19.53,"2015":19.79,"2016":19.88,"2017":19.73,"2018":20.64,"2019":22.63,"2020":23.54,"2021":24.35,"2022":25.82,"2023":27.68,"2024":29.06}},{"country":"Denmark","values":{"2004":20.5,"2005":22.61,"2006":23.66,"2007":26.71,"2008":27.96,"2009":29.4,"2010":30.37,"2011":31.89,"2012":33.2,"2013":34.68,"2014":38.01,"2015":39.54,"2016":41.08,"2017":44.06,"2018":44.97,"2019":47.3,"2020":51.07,"2021":51.55,"2022":51.4,"2023":54.5,"2024":56.42}},{"country":"Germany","values":{"2004":7.2,"2005":7.71,"2006":8.41,"2007":10.25,"2008":10.33,"2009":11.15,"2010":12.05,"2011":12.61,"2012":13.42,"2013":13.41,"2014":13.41,"2015":13.43,"2016":13.03,"2017":13.37,"2018":14.22,"2019":14.5,"2020":14.48,"2021":15.53,"2022":17.39,"2023":16.91,"2024":17.68}},{"country":"Estonia","values":{"2004":33.36,"2005":32.37,"2006":30.84,"2007":33.04,"2008":36.0,"2009":42.03,"2010":43.16,"2011":44.55,"2012":43.22,"2013":43.11,"2014":44.93,"2015":50.03,"2016":51.77,"2017":52.22,"2018":53.67,"2019":52.19,"2020":58.83,"2021":61.35,"2022":65.44,"2023":66.67,"2024":67.81}},{"country":"Ireland","values":{"2004":2.87,"2005":3.44,"2006":3.59,"2007":3.79,"2008":3.51,"2009":4.18,"2010":4.28,"2011":4.66,"2012":4.85,"2013":5.18,"2014":6.26,"2015":6.18,"2016":6.24,"2017":6.62,"2018":6.38,"2019":6.34,"2020":6.26,"2021":5.42,"2022":5.33,"2023":7.78,"2024":7.91}},{"country":"Greece","values":{"2004":13.46,"2005":13.38,"2006":13.1,"2007":14.68,"2008":14.72,"2009":17.25,"2010":18.66,"2011":20.11,"2012":24.12,"2013":27.42,"2014":27.87,"2015":26.56,"2016":25.42,"2017":28.25,"2018":30.12,"2019":30.05,"2020":31.94,"2021":31.08,"2022":30.62,"2023":35.55,"2024":32.64}},{"country":"Spain","values":{"2004":9.55,"2005":9.41,"2006":11.38,"2007":11.25,"2008":11.62,"2009":13.22,"2010":12.5,"2011":13.47,"2012":13.97,"2013":13.97,"2014":15.56,"2015":16.85,"2016":15.9,"2017":16.2,"2018":16.14,"2019":17.2,"2020":17.97,"2021":16.97,"2022":19.33,"2023":21.9,"2024":21.57}},{"country":"France","values":{"2004":12.53,"2005":12.36,"2006":11.7,"2007":12.79,"2008":13.28,"2009":15.04,"2010":16.16,"2011":15.26,"2012":16.59,"2013":17.61,"2014":18.05,"2015":18.88,"2016":20.12,"2017":20.6,"2018":21.22,"2019":22.36,"2020":23.37,"2021":24.76,"2022":26.6,"2023":30.18,"2024":31.32}},{"country":"Croatia","values":{"2004":29.41,"2005":30.0,"2006":29.07,"2007":29.3,"2008":28.82,"2009":31.3,"2010":32.88,"2011":33.82,"2012":36.55,"2013":37.31,"2014":36.22,"2015":38.62,"2016":37.64,"2017":36.63,"2018":36.65,"2019":36.79,"2020":36.93,"2021":38.01,"2022":37.21,"2023":36.17,"2024":34.8}},{"country":"Italy","values":{"2004":5.71,"2005":8.22,"2006":10.09,"2007":13.33,"2008":15.31,"2009":16.43,"2010":15.64,"2011":13.82,"2012":16.98,"2013":18.09,"2014":18.91,"2015":19.25,"2016":18.89,"2017":20.08,"2018":19.28,"2019":19.7,"2020":19.95,"2021":19.35,"2022":19.9,"2023":20.28,"2024":20.22}},{"country":"Cyprus","values":{"2004":9.26,"2005":9.97,"2006":10.43,"2007":13.06,"2008":14.47,"2009":17.31,"2010":18.81,"2011":19.98,"2012":21.76,"2013":22.54,"2014":22.19,"2015":24.07,"2016":24.69,"2017":26.42,"2018":37.16,"2019":35.05,"2020":37.12,"2021":42.59,"2022":41.56,"2023":42.75,"2024":42.3}},{"country":"Latvia","values":{"2004":42.49,"2005":42.68,"2006":42.59,"2007":42.36,"2008":42.94,"2009":47.89,"2010":40.74,"2011":44.71,"2012":47.27,"2013":49.65,"2014":52.15,"2015":51.74,"2016":51.81,"2017":54.58,"2018":55.41,"2019":57.75,"2020":57.09,"2021":57.38,"2022":61.0,"2023":61.4,"2024":61.79}},{"country":"Lithuania","values":{"2004":30.44,"2005":29.32,"2006":29.23,"2007":29.09,"2008":31.99,"2009":33.72,"2010":32.53,"2011":32.79,"2012":34.53,"2013":36.87,"2014":40.63,"2015":46.08,"2016":46.56,"2017":46.49,"2018":46.02,"2019":47.37,"2020":50.35,"2021":48.62,"2022":51.54,"2023":53.61,"2024":52.08}},{"country":"Luxembourg","values":{"2004":1.82,"2005":3.61,"2006":3.63,"2007":4.35,"2008":4.57,"2009":4.63,"2010":4.7,"2011":4.74,"2012":4.93,"2013":5.33,"2014":7.07,"2015":6.86,"2016":7.06,"2017":7.45,"2018":8.36,"2019":8.69,"2020":12.61,"2021":12.84,"2022":14.98,"2023":15.39,"2024":19.03}},{"country":"Hungary","values":{"2004":6.45,"2005":9.94,"2006":11.38,"2007":13.54,"2008":11.97,"2009":17.02,"2010":18.08,"2011":20.04,"2012":23.31,"2013":23.7,"2014":21.28,"2015":21.34,"2016":21.03,"2017":19.9,"2018":18.2,"2019":18.16,"2020":17.72,"2021":17.9,"2022":20.23,"2023":22.27,"2024":22.61}},{"country":"Malta","values":{"2004":1.03,"2005":1.03,"2006":1.36,"2007":1.51,"2008":1.7,"2009":2.01,"2010":7.28,"2011":12.03,"2012":13.4,"2013":15.4,"2014":15.03,"2015":14.64,"2016":16.85,"2017":19.31,"2018":22.82,"2019":23.6,"2020":23.03,"2021":32.61,"2022":40.22,"2023":53.23,"2024":59.21}},{"country":"Netherlands","values":{"2004":2.18,"2005":2.38,"2006":2.7,"2007":2.91,"2008":3.02,"2009":3.37,"2010":3.1,"2011":3.69,"2012":3.77,"2013":4.0,"2014":4.92,"2015":5.28,"2016":5.19,"2017":5.75,"2018":6.16,"2019":7.22,"2020":8.05,"2021":8.07,"2022":9.19,"2023":10.36,"2024":11.27}},{"country":"Austria","values":{"2004":20.16,"2005":22.82,"2006":24.49,"2007":27.14,"2008":27.2,"2009":29.63,"2010":30.96,"2011":31.52,"2012":33.08,"2013":33.22,"2014":33.38,"2015":33.23,"2016":33.48,"2017":33.67,"2018":34.18,"2019":33.93,"2020":34.99,"2021":33.13,"2022":31.82,"2023":40.77,"2024":42.17}},{"country":"Poland","values":{"2004":10.21,"2005":10.16,"2006":10.17,"2007":10.46,"2008":10.85,"2009":11.61,"2010":11.81,"2011":13.24,"2012":13.5,"2013":14.27,"2014":14.24,"2015":14.79,"2016":14.92,"2017":14.78,"2018":21.47,"2019":22.0,"2020":22.14,"2021":20.98,"2022":22.09,"2023":20.61,"2024":21.29}},{"country":"Portugal","values":{"2004":32.49,"2005":32.08,"2006":34.23,"2007":34.95,"2008":37.45,"2009":37.93,"2010":33.81,"2011":35.18,"2012":33.15,"2013":34.63,"2014":40.45,"2015":40.1,"2016":41.61,"2017":41.02,"2018":40.92,"2019":41.66,"2020":41.55,"2021":42.68,"2022":45.55,"2023":47.1,"2024":46.95}},{"country":"Romania","values":{"2004":17.34,"2005":17.93,"2006":17.58,"2007":19.46,"2008":23.17,"2009":26.43,"2010":27.23,"2011":24.31,"2012":25.75,"2013":26.2,"2014":26.74,"2015":25.89,"2016":26.86,"2017":26.58,"2018":25.43,"2019":25.74,"2020":25.33,"2021":24.57,"2022":26.25,"2023":29.13,"2024":28.1}},{"country":"Slovenia","values":{"2004":22.82,"2005":26.4,"2006":24.35,"2007":29.31,"2008":27.53,"2009":28.87,"2010":29.54,"2011":31.79,"2012":33.15,"2013":35.12,"2014":34.64,"2015":36.15,"2016":35.56,"2017":34.64,"2018":32.34,"2019":32.13,"2020":32.14,"2021":35.22,"2022":33.99,"2023":34.3,"2024":33.66}},{"country":"Slovakia","values":{"2004":5.06,"2005":5.03,"2006":4.45,"2007":6.23,"2008":6.1,"2009":8.18,"2010":7.9,"2011":9.26,"2012":8.8,"2013":7.88,"2014":8.87,"2015":10.79,"2016":9.88,"2017":9.84,"2018":10.6,"2019":19.7,"2020":19.43,"2021":19.52,"2022":19.88,"2023":18.8,"2024":20.43}},{"country":"Finland","values":{"2004":39.5,"2005":39.12,"2006":41.41,"2007":41.43,"2008":43.08,"2009":42.89,"2010":43.97,"2011":45.73,"2012":48.23,"2013":50.77,"2014":51.95,"2015":52.62,"2016":53.7,"2017":54.59,"2018":54.91,"2019":56.88,"2020":57.62,"2021":52.09,"2022":58.29,"2023":61.35,"2024":62.59}},{"country":"Sweden","values":{"2004":45.93,"2005":49.02,"2006":52.5,"2007":54.47,"2008":55.78,"2009":59.2,"2010":57.07,"2011":58.52,"2012":60.63,"2013":61.71,"2014":62.57,"2015":63.23,"2016":63.41,"2017":63.62,"2018":63.3,"2019":64.39,"2020":66.38,"2021":68.53,"2022":69.81,"2023":67.07,"2024":67.83}},{"country":"Iceland","values":{"2004":52.34,"2005":53.73,"2006":57.19,"2007":60.91,"2008":64.08,"2009":64.41,"2010":66.19,"2011":68.1,"2012":68.75,"2013":65.89,"2014":67.03,"2015":69.2,"2016":78.25,"2017":78.25,"2018":79.95,"2019":80.9,"2020":80.5,"2021":79.62,"2022":82.03,"2023":83.11,"2024":79.45}},{"country":"Norway","values":{"2004":25.55,"2005":28.84,"2006":28.43,"2007":29.33,"2008":30.92,"2009":31.81,"2010":33.73,"2011":34.67,"2012":33.97,"2013":32.76,"2014":30.91,"2015":32.67,"2016":32.35,"2017":32.46,"2018":33.1,"2019":35.38,"2020":36.13,"2021":31.37,"2022":33.17,"2023":34.07,"2024":35.23}},{"country":"Bosnia and Herzegovina","values":{"2004":null,"2005":null,"2006":null,"2007":null,"2008":null,"2009":null,"2010":null,"2011":null,"2012":null,"2013":null,"2014":28.63,"2015":32.77,"2016":32.33,"2017":28.74,"2018":52.69,"2019":55.87,"2020":56.62,"2021":53.31,"2022":57.65,"2023":59.67,"2024":null}},{"country":"Montenegro","values":{"2004":null,"2005":52.91,"2006":51.36,"2007":49.13,"2008":46.01,"2009":62.08,"2010":76.48,"2011":81.29,"2012":79.79,"2013":68.49,"2014":67.62,"2015":68.54,"2016":69.08,"2017":65.68,"2018":64.5,"2019":62.65,"2020":64.78,"2021":63.5,"2022":64.89,"2023":66.59,"2024":68.3}},{"country":"Moldova","values":{"2004":20.16,"2005":17.42,"2006":18.4,"2007":17.35,"2008":19.02,"2009":21.41,"2010":34.58,"2011":36.34,"2012":39.02,"2013":40.01,"2014":43.63,"2015":44.56,"2016":45.54,"2017":46.1,"2018":45.06,"2019":40.47,"2020":41.17,"2021":36.88,"2022":38.39,"2023":40.66,"2024":36.65}},{"country":"North Macedonia","values":{"2004":23.31,"2005":24.68,"2006":24.92,"2007":22.49,"2008":24.64,"2009":29.21,"2010":26.5,"2011":27.34,"2012":29.59,"2013":31.76,"2014":34.99,"2015":34.47,"2016":30.92,"2017":36.3,"2018":32.45,"2019":32.07,"2020":33.73,"2021":40.86,"2022":43.79,"2023":37.28,"2024":37.88}},{"country":"Georgia","values":{"2004":null,"2005":null,"2006":null,"2007":null,"2008":null,"2009":null,"2010":null,"2011":null,"2012":null,"2013":null,"2014":null,"2015":null,"2016":null,"2017":null,"2018":null,"2019":null,"2020":null,"2021":12.37,"2022":10.43,"2023":10.78,"2024":9.33}},{"country":"Albania","values":{"2004":33.14,"2005":37.76,"2006":30.96,"2007":33.15,"2008":37.06,"2009":34.73,"2010":31.26,"2011":31.43,"2012":39.1,"2013":37.77,"2014":30.98,"2015":34.61,"2016":32.49,"2017":23.97,"2018":21.99,"2019":24.75,"2020":25.12,"2021":21.2,"2022":22.09,"2023":22.92,"2024":3.37}},{"country":"Serbia","values":{"2004":14.03,"2005":15.56,"2006":15.76,"2007":13.19,"2008":16.73,"2009":26.5,"2010":23.2,"2011":21.09,"2012":23.2,"2013":25.14,"2014":28.84,"2015":26.93,"2016":25.08,"2017":24.9,"2018":24.29,"2019":26.65,"2020":35.68,"2021":35.4,"2022":34.73,"2023":35.88,"2024":37.23}},{"country":"Kosovo*","values":{"2004":51.86,"2005":49.49,"2006":48.93,"2007":49.21,"2008":47.79,"2009":47.76,"2010":45.55,"2011":44.68,"2012":49.34,"2013":49.72,"2014":51.82,"2015":46.73,"2016":51.78,"2017":50.53,"2018":56.74,"2019":54.79,"2020":55.89,"2021":52.1,"2022":46.07,"2023":45.35,"2024":42.81}}],"Electricity":[{"country":"European Union - 27 countries (from 2020)","values":{"2004":15.87,"2005":16.4,"2006":16.88,"2007":17.65,"2008":18.53,"2009":20.65,"2010":21.28,"2011":23.3,"2012":25.14,"2013":26.77,"2014":28.6,"2015":29.66,"2016":30.17,"2017":31.1,"2018":32.13,"2019":34.09,"2020":37.41,"2021":37.79,"2022":41.24,"2023":45.4,"2024":47.5}},{"country":"Belgium","values":{"2004":1.71,"2005":2.39,"2006":3.13,"2007":3.66,"2008":4.62,"2009":6.18,"2010":7.33,"2011":8.99,"2012":11.34,"2013":12.55,"2014":13.41,"2015":15.57,"2016":15.83,"2017":17.21,"2018":18.89,"2019":20.82,"2020":25.12,"2021":26.04,"2022":29.5,"2023":31.37,"2024":31.27}},{"country":"Bulgaria","values":{"2004":8.36,"2005":8.67,"2006":8.73,"2007":8.9,"2008":9.54,"2009":10.91,"2010":12.36,"2011":12.62,"2012":15.82,"2013":18.68,"2014":18.69,"2015":18.98,"2016":19.15,"2017":19.02,"2018":22.36,"2019":23.51,"2020":23.59,"2021":21.41,"2022":20.36,"2023":29.7,"2024":33.84}},{"country":"Czechia","values":{"2004":3.69,"2005":3.78,"2006":4.1,"2007":4.62,"2008":5.18,"2009":6.38,"2010":7.52,"2011":10.61,"2012":11.67,"2013":12.78,"2014":13.89,"2015":14.07,"2016":13.62,"2017":13.65,"2018":13.71,"2019":14.05,"2020":14.81,"2021":14.47,"2022":15.5,"2023":16.45,"2024":17.93}},{"country":"Denmark","values":{"2004":23.75,"2005":24.65,"2006":23.97,"2007":25.0,"2008":25.94,"2009":28.26,"2010":32.73,"2011":35.87,"2012":38.72,"2013":43.08,"2014":48.49,"2015":51.29,"2016":53.72,"2017":59.94,"2018":62.39,"2019":65.35,"2020":65.32,"2021":73.18,"2022":76.71,"2023":78.97,"2024":79.66}},{"country":"Germany","values":{"2004":9.44,"2005":10.58,"2006":11.94,"2007":13.73,"2008":15.14,"2009":17.52,"2010":18.24,"2011":20.93,"2012":23.61,"2013":25.28,"2014":28.17,"2015":30.88,"2016":32.27,"2017":34.61,"2018":37.59,"2019":40.6,"2020":44.22,"2021":43.96,"2022":48.04,"2023":51.95,"2024":54.08}},{"country":"Estonia","values":{"2004":0.55,"2005":1.13,"2006":1.43,"2007":1.43,"2008":1.97,"2009":5.97,"2010":10.29,"2011":12.2,"2012":15.67,"2013":12.95,"2014":14.02,"2015":16.15,"2016":16.19,"2017":17.58,"2018":19.68,"2019":22.0,"2020":28.29,"2021":29.2,"2022":29.11,"2023":31.84,"2024":38.88}},{"country":"Ireland","values":{"2004":6.03,"2005":7.2,"2006":8.51,"2007":9.53,"2008":10.82,"2009":14.06,"2010":15.64,"2011":18.25,"2012":19.84,"2013":20.96,"2014":23.32,"2015":25.73,"2016":27.07,"2017":30.32,"2018":33.32,"2019":36.46,"2020":39.05,"2021":37.66,"2022":37.39,"2023":40.43,"2024":41.34}},{"country":"Greece","values":{"2004":7.84,"2005":8.21,"2006":8.92,"2007":9.33,"2008":9.65,"2009":11.02,"2010":12.31,"2011":13.81,"2012":16.36,"2013":21.24,"2014":21.92,"2015":22.09,"2016":22.66,"2017":24.46,"2018":26.0,"2019":31.3,"2020":35.86,"2021":35.88,"2022":42.36,"2023":48.23,"2024":51.25}},{"country":"Spain","values":{"2004":19.02,"2005":19.17,"2006":20.03,"2007":21.72,"2008":23.78,"2009":27.88,"2010":29.75,"2011":31.53,"2012":33.44,"2013":36.03,"2014":37.13,"2015":36.97,"2016":36.68,"2017":36.47,"2018":35.24,"2019":37.13,"2020":42.94,"2021":45.99,"2022":50.89,"2023":56.91,"2024":59.67}},{"country":"France","values":{"2004":13.78,"2005":13.74,"2006":14.06,"2007":14.29,"2008":14.36,"2009":15.09,"2010":14.81,"2011":16.18,"2012":16.55,"2013":16.98,"2014":18.46,"2015":18.82,"2016":19.21,"2017":19.93,"2018":21.13,"2019":22.39,"2020":24.82,"2021":24.82,"2022":27.36,"2023":30.3,"2024":31.34}},{"country":"Croatia","values":{"2004":35.03,"2005":35.18,"2006":34.82,"2007":33.98,"2008":33.87,"2009":35.88,"2010":37.52,"2011":37.59,"2012":38.76,"2013":42.08,"2014":45.24,"2015":45.41,"2016":46.67,"2017":46.44,"2018":48.14,"2019":49.78,"2020":53.82,"2021":53.47,"2022":56.24,"2023":57.52,"2024":58.04}},{"country":"Italy","values":{"2004":16.09,"2005":16.29,"2006":15.93,"2007":15.95,"2008":16.64,"2009":18.81,"2010":20.09,"2011":23.55,"2012":27.42,"2013":31.3,"2014":33.42,"2015":33.46,"2016":34.01,"2017":34.1,"2018":33.93,"2019":34.97,"2020":38.08,"2021":36.0,"2022":37.1,"2023":38.91,"2024":40.65}},{"country":"Cyprus","values":{"2004":0.02,"2005":0.02,"2006":0.03,"2007":0.07,"2008":0.28,"2009":0.59,"2010":1.39,"2011":3.44,"2012":4.93,"2013":6.65,"2014":7.4,"2015":8.45,"2016":8.59,"2017":8.91,"2018":9.36,"2019":9.76,"2020":12.04,"2021":14.84,"2022":16.96,"2023":20.94,"2024":24.09}},{"country":"Latvia","values":{"2004":45.96,"2005":43.02,"2006":40.41,"2007":38.62,"2008":38.73,"2009":41.94,"2010":42.05,"2011":44.69,"2012":44.88,"2013":48.69,"2014":51.04,"2015":52.2,"2016":51.25,"2017":54.35,"2018":53.5,"2019":53.42,"2020":53.36,"2021":51.4,"2022":53.52,"2023":54.32,"2024":55.51}},{"country":"Lithuania","values":{"2004":3.59,"2005":3.83,"2006":4.02,"2007":4.65,"2008":4.91,"2009":5.87,"2010":7.4,"2011":9.02,"2012":10.88,"2013":13.15,"2014":13.71,"2015":15.54,"2016":16.87,"2017":18.25,"2018":18.41,"2019":18.79,"2020":20.17,"2021":21.28,"2022":26.46,"2023":36.47,"2024":48.99}},{"country":"Luxembourg","values":{"2004":2.77,"2005":3.18,"2006":3.17,"2007":3.31,"2008":3.58,"2009":4.11,"2010":3.79,"2011":4.08,"2012":4.66,"2013":5.33,"2014":5.96,"2015":6.2,"2016":6.67,"2017":8.05,"2018":9.12,"2019":10.86,"2020":13.89,"2021":14.22,"2022":16.32,"2023":18.2,"2024":20.5}},{"country":"Hungary","values":{"2004":2.22,"2005":4.42,"2006":3.45,"2007":4.19,"2008":5.32,"2009":6.96,"2010":7.1,"2011":6.38,"2012":6.06,"2013":6.6,"2014":7.3,"2015":7.34,"2016":7.29,"2017":7.51,"2018":8.31,"2019":9.97,"2020":11.9,"2021":13.66,"2022":15.33,"2023":19.54,"2024":24.06}},{"country":"Malta","values":{"2004":0.0,"2005":0.0,"2006":0.0,"2007":0.0,"2008":0.0,"2009":0.0,"2010":0.03,"2011":0.45,"2012":1.11,"2013":1.57,"2014":3.33,"2015":4.31,"2016":5.71,"2017":6.84,"2018":7.7,"2019":7.49,"2020":9.49,"2021":9.65,"2022":10.11,"2023":10.73,"2024":10.65}},{"country":"Netherlands","values":{"2004":4.45,"2005":6.3,"2006":6.54,"2007":5.96,"2008":7.46,"2009":9.07,"2010":9.6,"2011":9.74,"2012":10.35,"2013":9.91,"2014":9.92,"2015":11.04,"2016":12.55,"2017":13.81,"2018":15.17,"2019":18.23,"2020":26.41,"2021":33.25,"2022":39.65,"2023":46.42,"2024":50.55}},{"country":"Austria","values":{"2004":61.63,"2005":62.9,"2006":63.53,"2007":65.67,"2008":65.88,"2009":68.63,"2010":66.36,"2011":66.78,"2012":67.44,"2013":68.91,"2014":71.06,"2015":71.49,"2016":72.52,"2017":71.63,"2018":74.19,"2019":75.07,"2020":78.2,"2021":74.01,"2022":73.64,"2023":87.9,"2024":90.06}},{"country":"Poland","values":{"2004":2.05,"2005":2.51,"2006":2.86,"2007":3.32,"2008":4.25,"2009":5.71,"2010":6.55,"2011":8.08,"2012":10.61,"2013":10.68,"2014":12.36,"2015":13.4,"2016":13.34,"2017":13.08,"2018":13.03,"2019":14.36,"2020":16.24,"2021":17.17,"2022":21.01,"2023":25.79,"2024":30.37}},{"country":"Portugal","values":{"2004":27.39,"2005":27.7,"2006":29.31,"2007":32.28,"2008":34.06,"2009":37.56,"2010":40.61,"2011":45.78,"2012":47.51,"2013":49.1,"2014":52.05,"2015":52.62,"2016":53.99,"2017":54.17,"2018":52.19,"2019":53.77,"2020":58.03,"2021":58.43,"2022":60.99,"2023":63.01,"2024":65.8}},{"country":"Romania","values":{"2004":28.43,"2005":28.77,"2006":28.05,"2007":28.11,"2008":28.07,"2009":30.89,"2010":30.38,"2011":31.13,"2012":33.57,"2013":37.52,"2014":41.68,"2015":43.16,"2016":42.71,"2017":41.97,"2018":41.79,"2019":42.62,"2020":43.37,"2021":42.68,"2022":43.73,"2023":47.39,"2024":47.65}},{"country":"Slovenia","values":{"2004":29.27,"2005":28.65,"2006":28.23,"2007":27.7,"2008":29.96,"2009":33.76,"2010":32.2,"2011":31.05,"2012":31.64,"2013":33.08,"2014":33.94,"2015":32.72,"2016":32.06,"2017":32.42,"2018":32.31,"2019":32.63,"2020":35.09,"2021":34.98,"2022":37.01,"2023":41.89,"2024":43.08}},{"country":"Slovakia","values":{"2004":15.4,"2005":15.73,"2006":16.57,"2007":16.47,"2008":17.01,"2009":17.77,"2010":17.77,"2011":19.3,"2012":20.05,"2013":20.8,"2014":22.87,"2015":22.66,"2016":22.51,"2017":21.34,"2018":21.5,"2019":22.1,"2020":23.07,"2021":22.4,"2022":22.9,"2023":24.2,"2024":24.91}},{"country":"Finland","values":{"2004":26.71,"2005":26.92,"2006":26.42,"2007":25.47,"2008":26.75,"2009":26.82,"2010":27.22,"2011":28.96,"2012":29.11,"2013":30.54,"2014":31.11,"2015":32.21,"2016":32.72,"2017":35.04,"2018":36.54,"2019":37.97,"2020":39.56,"2021":39.58,"2022":47.97,"2023":52.37,"2024":54.31}},{"country":"Sweden","values":{"2004":51.2,"2005":50.9,"2006":51.78,"2007":53.21,"2008":53.69,"2009":58.25,"2010":55.77,"2011":59.62,"2012":59.78,"2013":61.74,"2014":63.21,"2015":65.73,"2016":64.87,"2017":65.91,"2018":66.23,"2019":71.23,"2020":74.5,"2021":75.76,"2022":83.37,"2023":87.55,"2024":88.14}},{"country":"Iceland","values":{"2004":93.15,"2005":94.93,"2006":93.5,"2007":113.7,"2008":90.85,"2009":92.86,"2010":92.42,"2011":93.92,"2012":95.42,"2013":96.72,"2014":97.06,"2015":93.11,"2016":95.31,"2017":93.38,"2018":98.5,"2019":100.64,"2020":102.71,"2021":99.54,"2022":98.67,"2023":99.9,"2024":102.44}},{"country":"Norway","values":{"2004":97.97,"2005":97.42,"2006":100.84,"2007":99.05,"2008":100.15,"2009":105.19,"2010":98.25,"2011":105.89,"2012":104.6,"2013":106.92,"2014":110.14,"2015":106.83,"2016":105.64,"2017":104.85,"2018":106.83,"2019":110.44,"2020":113.8,"2021":113.64,"2022":120.01,"2023":116.54,"2024":115.06}},{"country":"Bosnia and Herzegovina","values":{"2004":null,"2005":null,"2006":null,"2007":null,"2008":null,"2009":null,"2010":null,"2011":null,"2012":null,"2013":null,"2014":38.39,"2015":38.73,"2016":40.83,"2017":39.56,"2018":41.5,"2019":45.48,"2020":49.31,"2021":46.32,"2022":48.42,"2023":51.56,"2024":null}},{"country":"Montenegro","values":{"2004":null,"2005":39.1,"2006":37.68,"2007":37.62,"2008":38.26,"2009":46.62,"2010":45.74,"2011":41.58,"2012":42.77,"2013":49.07,"2014":51.44,"2015":49.61,"2016":50.96,"2017":50.11,"2018":52.42,"2019":53.65,"2020":61.49,"2021":60.46,"2022":68.51,"2023":67.53,"2024":66.57}},{"country":"Moldova","values":{"2004":0.84,"2005":0.82,"2006":0.79,"2007":0.83,"2008":0.83,"2009":0.96,"2010":1.81,"2011":1.8,"2012":1.69,"2013":1.69,"2014":1.9,"2015":1.98,"2016":1.95,"2017":2.14,"2018":2.63,"2019":3.04,"2020":3.12,"2021":3.58,"2022":5.54,"2023":9.21,"2024":13.69}},{"country":"North Macedonia","values":{"2004":14.51,"2005":13.99,"2006":14.01,"2007":13.67,"2008":13.85,"2009":15.47,"2010":15.85,"2011":14.85,"2012":16.66,"2013":18.21,"2014":19.27,"2015":21.66,"2016":24.14,"2017":24.84,"2018":24.84,"2019":23.78,"2020":23.53,"2021":22.79,"2022":25.87,"2023":32.34,"2024":40.07}},{"country":"Georgia","values":{"2004":null,"2005":null,"2006":null,"2007":null,"2008":null,"2009":null,"2010":null,"2011":null,"2012":null,"2013":null,"2014":null,"2015":null,"2016":null,"2017":null,"2018":null,"2019":null,"2020":null,"2021":51.31,"2022":55.49,"2023":66.26,"2024":68.41}},{"country":"Albania","values":{"2004":69.98,"2005":76.11,"2006":74.21,"2007":79.63,"2008":73.3,"2009":70.71,"2010":74.62,"2011":66.13,"2012":72.43,"2013":62.66,"2014":70.98,"2015":79.22,"2016":82.1,"2017":91.03,"2018":92.45,"2019":92.99,"2020":99.97,"2021":94.42,"2022":102.97,"2023":105.38,"2024":105.19}},{"country":"Serbia","values":{"2004":18.49,"2005":22.37,"2006":23.6,"2007":24.81,"2008":25.86,"2009":28.25,"2010":28.18,"2011":27.53,"2012":28.51,"2013":27.97,"2014":30.27,"2015":28.91,"2016":29.15,"2017":27.45,"2018":28.66,"2019":30.11,"2020":30.7,"2021":29.9,"2022":30.14,"2023":31.75,"2024":32.05}},{"country":"Kosovo*","values":{"2004":0.47,"2005":0.61,"2006":0.91,"2007":0.97,"2008":0.97,"2009":1.14,"2010":1.36,"2011":1.37,"2012":1.5,"2013":1.63,"2014":1.87,"2015":1.84,"2016":3.97,"2017":3.62,"2018":4.23,"2019":5.16,"2020":5.26,"2021":5.17,"2022":6.68,"2023":8.97,"2024":9.36}}]};
 
     const EU_LABEL = "European Union - 27 countries (from 2020)";
+
+    // The legacy PALETTE/SECTOR_COLORS table is kept for any code that still
+    // references it; the live colours now come from SECTOR_THEMES below and
+    // the CSS --accent-* variables that JS rebinds on every refresh.
     const PALETTE = {
       green:    "#197a47",
       greenDk:  "#115e36",
@@ -604,14 +993,653 @@
       slate:    "#475569",
       slateLt:  "#94a3b8"
     };
-    const SECTOR_COLORS = {
-      "Electricity":      PALETTE.green,
-      "Heating&Cooling":  PALETTE.amber,
-      "Transport":        PALETTE.slate
+
+    /* ============================================================
+       SECTOR THEMES — each entry is a full design palette. Selecting
+       a sector swaps the entire dashboard's accent system to that
+       palette: choropleth fill ramp, KPI stripes, button colours,
+       chart strokes, tooltips, scrollbars, slider thumbs, etc.
+       The 5-stop choropleth ramp uses: 50, 100, 300, 500, 700, 900.
+       ============================================================ */
+    const SECTOR_THEMES = {
+      "All": {
+        title: "Overall Renewable Energy Share",
+        family: "pastel green",
+        // CSS variables (the dashboard's single source of theme truth)
+        vars: {
+          "--accent-50":   "#dcefc7",
+          "--accent-100":  "#c5e3a4",
+          "--accent-200":  "#a6d27d",
+          "--accent-300":  "#80bd5b",
+          "--accent-400":  "#5ba43e",
+          "--accent-500":  "#3f8e2c",
+          "--accent-600":  "#2d7a2c",
+          "--accent-700":  "#205c22",
+          "--accent-800":  "#143f17",
+          "--accent-900":  "#0a230d",
+          "--accent-soft": "#e8f3d4",
+          "--accent-glow": "rgba(45,122,44,0.22)",
+          "--accent-grid": "#edf3eb",
+          "--accent-line-bg": "rgba(45,122,44,0.18)"
+        },
+        // 6-stop choropleth ramp, low → high. Lightest stop is intentionally
+        // more saturated than the page background (#f1f6f0) so even the
+        // lowest-share country reads as data, not as empty canvas.
+        ramp: ["#cee9b1", "#b0d985", "#86c25a", "#5da737", "#34861d", "#175c0e"]
+      },
+      "Heating&Cooling": {
+        title: "Heating & Cooling Sector",
+        family: "warm orange",
+        vars: {
+          "--accent-50":   "#fbd9a9",
+          "--accent-100":  "#f8c47d",
+          "--accent-200":  "#f3a755",
+          "--accent-300":  "#ec8a35",
+          "--accent-400":  "#dc7822",
+          "--accent-500":  "#c46208",
+          "--accent-600":  "#a85007",
+          "--accent-700":  "#823c05",
+          "--accent-800":  "#5c2a03",
+          "--accent-900":  "#321702",
+          "--accent-soft": "#fde3bd",
+          "--accent-glow": "rgba(196,98,8,0.22)",
+          "--accent-grid": "#f6ece0",
+          "--accent-line-bg": "rgba(196,98,8,0.18)"
+        },
+        ramp: ["#fbd1a1", "#f5b675", "#eb944c", "#d67224", "#a55307", "#6b3404"]
+      },
+      "Electricity": {
+        title: "Electricity Sector",
+        family: "marine blue",
+        vars: {
+          "--accent-50":   "#c4dcf2",
+          "--accent-100":  "#9ec3e7",
+          "--accent-200":  "#6ea4d6",
+          "--accent-300":  "#3f81bf",
+          "--accent-400":  "#2068a8",
+          "--accent-500":  "#16548d",
+          "--accent-600":  "#0f4271",
+          "--accent-700":  "#0a3055",
+          "--accent-800":  "#072140",
+          "--accent-900":  "#051527",
+          "--accent-soft": "#d6e5f4",
+          "--accent-glow": "rgba(15,66,113,0.22)",
+          "--accent-grid": "#e7edf3",
+          "--accent-line-bg": "rgba(15,66,113,0.18)"
+        },
+        ramp: ["#bcd5ef", "#90b6e0", "#5e8eca", "#2e69ad", "#114987", "#072e58"]
+      },
+      "Transport": {
+        title: "Transport Sector",
+        family: "violet purple",
+        vars: {
+          "--accent-50":   "#e0c5ef",
+          "--accent-100":  "#cba1e3",
+          "--accent-200":  "#ad7bcf",
+          "--accent-300":  "#8855b6",
+          "--accent-400":  "#6e3fa3",
+          "--accent-500":  "#572e88",
+          "--accent-600":  "#43236c",
+          "--accent-700":  "#321a51",
+          "--accent-800":  "#21113a",
+          "--accent-900":  "#120822",
+          "--accent-soft": "#ead5f3",
+          "--accent-glow": "rgba(67,35,108,0.22)",
+          "--accent-grid": "#efeaf3",
+          "--accent-line-bg": "rgba(67,35,108,0.18)"
+        },
+        ramp: ["#d8b9eb", "#bd92dd", "#9b68c5", "#7440a4", "#4d2280", "#2a0e54"]
+      }
     };
+
+    // For the donut chart we still want each sector slice to read in its
+    // OWN theme colour (so the "All" view shows the three sector themes
+    // side-by-side). Drawn from SECTOR_THEMES so they stay in sync.
+    const SECTOR_SLICE_COLOR = {
+      "Electricity":     SECTOR_THEMES["Electricity"].vars["--accent-600"],
+      "Heating&Cooling": SECTOR_THEMES["Heating&Cooling"].vars["--accent-600"],
+      "Transport":       SECTOR_THEMES["Transport"].vars["--accent-600"]
+    };
+
+    /* ============================================================
+       EU REGION GROUPS — used by the dynamic Key Insight section
+       to surface which macro-region of Europe is leading on the
+       selected sector and year. Cardinal-direction names so the
+       insight reads naturally: "the Northern bloc leads...",
+       "the Eastern bloc...", etc.
+       ============================================================ */
+    const EU_REGIONS = {
+      "North":     ["Denmark", "Finland", "Sweden"],
+      "Northeast": ["Estonia", "Latvia", "Lithuania"],
+      "West":      ["Austria", "Belgium", "France", "Germany", "Ireland", "Luxembourg", "Netherlands"],
+      "South":     ["Cyprus", "Greece", "Italy", "Malta", "Portugal", "Spain"],
+      "East":      ["Bulgaria", "Croatia", "Czechia", "Hungary", "Poland", "Romania", "Slovakia", "Slovenia"]
+    };
+
+    /* ============================================================
+       EU-27 ISO numeric → Eurostat country name mapping.
+       world-atlas TopoJSON uses ISO 3166-1 numeric codes as the `id`
+       on each feature; we translate to the names that appear in our
+       Eurostat DATA[].country values for lookup.
+       ============================================================ */
+    const EU27_ISO_TO_NAME = {
+      "040": "Austria",   "056": "Belgium",   "100": "Bulgaria",  "191": "Croatia",
+      "196": "Cyprus",    "203": "Czechia",   "208": "Denmark",   "233": "Estonia",
+      "246": "Finland",   "250": "France",    "276": "Germany",   "300": "Greece",
+      "348": "Hungary",   "372": "Ireland",   "380": "Italy",     "428": "Latvia",
+      "440": "Lithuania", "442": "Luxembourg","470": "Malta",     "528": "Netherlands",
+      "616": "Poland",    "620": "Portugal",  "642": "Romania",   "703": "Slovakia",
+      "705": "Slovenia",  "724": "Spain",     "752": "Sweden"
+    };
+    const EU27_NAMES = new Set(Object.values(EU27_ISO_TO_NAME));
+
+    /* ============================================================
+       MAPPED COUNTRIES — the full scope of the Eurostat dataset.
+       The brand subtitle reads "EU-27 & neighbouring countries"
+       because Eurostat publishes the same indicator for EFTA
+       members (Iceland, Norway), EU candidate countries (Western
+       Balkans, Moldova, Ukraine pending, Georgia) and other
+       partners (Kosovo*). Every country with a row in the Excel
+       gets coloured on the choropleth — only countries with NO
+       data (UK, Switzerland, Russia, Türkiye, Belarus, Ukraine,
+       N. Africa) render as muted grey context.
+       ============================================================ */
+    const MAPPED_ISO_TO_NAME = Object.assign({}, EU27_ISO_TO_NAME, {
+      "352": "Iceland",
+      "578": "Norway",
+      "070": "Bosnia and Herzegovina",
+      "499": "Montenegro",
+      "498": "Moldova",
+      "807": "North Macedonia",
+      "268": "Georgia",
+      "008": "Albania",
+      "688": "Serbia",
+      "412": "Kosovo*"   // world-atlas/Natural Earth often emits "-99" for
+                          // Kosovo's disputed status; we fall back to a
+                          // name-match in buildMap if the ISO doesn't hit.
+    });
+    const MAPPED_NAMES = new Set(Object.values(MAPPED_ISO_TO_NAME));
+    // Fallback resolver — some TopoJSON sources tag Kosovo with id "-99"
+    // or null instead of a numeric ISO. Match on feature properties.name
+    // when the ID lookup fails.
+    const NAME_FALLBACKS = {
+      "Kosovo": "Kosovo*",
+      "Republic of Kosovo": "Kosovo*"
+    };
+
+    // Short labels used on the map where the full name doesn't fit.
+    const COUNTRY_SHORT = {
+      "Austria":"AT","Belgium":"BE","Bulgaria":"BG","Croatia":"HR","Cyprus":"CY",
+      "Czechia":"CZ","Denmark":"DK","Estonia":"EE","Finland":"FI","France":"FR",
+      "Germany":"DE","Greece":"GR","Hungary":"HU","Ireland":"IE","Italy":"IT",
+      "Latvia":"LV","Lithuania":"LT","Luxembourg":"LU","Malta":"MT",
+      "Netherlands":"NL","Poland":"PL","Portugal":"PT","Romania":"RO",
+      "Slovakia":"SK","Slovenia":"SI","Spain":"ES","Sweden":"SE",
+      // Non-EU mapped countries
+      "Iceland":"IS","Norway":"NO",
+      "Bosnia and Herzegovina":"BiH","Montenegro":"MNE","Moldova":"MD",
+      "North Macedonia":"MK","Georgia":"GE","Albania":"AL","Serbia":"RS",
+      "Kosovo*":"XK"
+    };
+
+    /* ============================================================
+       NON-DATASET LABEL DICTIONARY — countries which do NOT appear
+       in the Eurostat dataset (UK, Switzerland, Russia, Türkiye,
+       Belarus, Ukraine, N. Africa). They render as muted grey
+       geographic context only — no choropleth fill, no percentage.
+       Iceland / Norway / Western Balkans / Moldova / Georgia are
+       in the dataset so they're rendered as coloured choropleth
+       countries via MAPPED_ISO_TO_NAME, not here.
+       ============================================================ */
+    const NON_EU_LABEL_COORDS = [
+      // [lng, lat, displayName, sizeClass]
+      [ -2,   53,  "United Kingdom",  "lg"],
+      [  8.2, 47,  "Switz.",          ""  ],
+      [ 27,   53,  "Belarus",         "lg"],
+      [ 31,   49,  "Ukraine",         "lg"],
+      [ 38,   56,  "Russia",          "lg"],
+      [ 33,   39,  "Türkiye",         "lg"],
+      [ -6,   32,  "Morocco",         ""  ],
+      [  9,   34,  "Tunisia",         ""  ],
+      [  3,   29,  "Algeria",         "lg"]
+    ];
 
     let YEARS, YEAR_MIN, YEAR_MAX, COUNTRIES;
     let barChart, lineChart, donutChart;
+
+    // Cached topology + projected geometry once the world-atlas TopoJSON
+    // has loaded. Drawn lazily; the rest of the dashboard renders first.
+    let mapTopology = null;
+    let mapCountriesFeatures = null;   // GeoJSON features collection
+    let mapReady = false;
+
+    /* ============================================================
+       MAP ZOOM / PAN STATE
+       The zoom behaviour is attached to the SVG once. The transform
+       is stored at module scope so it survives across rebuilds —
+       switching sectors / years redraws the map but keeps the
+       user's current zoom level and pan offset.
+       ============================================================ */
+    let mapZoomBehavior = null;
+    let currentMapTransform = (typeof d3 !== "undefined" && d3.zoomIdentity)
+      ? d3.zoomIdentity : null;
+
+    /* ============================================================
+       THEME APPLICATION — single source of truth.
+       Rebinds the dashboard's --accent-* CSS variables to the
+       selected sector palette so every accented surface (KPIs,
+       insight strip, button, slider, scrollbar, brand mark, chart
+       headings, choropleth ramp) repaints together.
+       ============================================================ */
+    function applyTheme(sector) {
+      const theme = SECTOR_THEMES[sector] || SECTOR_THEMES["All"];
+      const root  = document.documentElement.style;
+      Object.entries(theme.vars).forEach(([k, v]) => root.setProperty(k, v));
+    }
+
+    // Read a live CSS variable so Chart.js picks up the current theme.
+    function cssVar(name) {
+      return getComputedStyle(document.documentElement)
+        .getPropertyValue(name).trim();
+    }
+
+    /* ============================================================
+       EU-27 CHOROPLETH MAP — pure D3 SVG, no iframe.
+       Geometry: world-atlas countries-50m TopoJSON.
+       Projection: conic conformal centred on Europe.
+       Coloring: 6-stop ramp from SECTOR_THEMES[sector].ramp using a
+       quantile-style scale on the EU-27 distribution for the year.
+       ============================================================ */
+    const MAP_W = 374, MAP_H = 470;
+
+    // Mercator centred on Europe with a fixed scale/translate tuned to fill
+    // the map shell tightly. The viewBox now matches the shell's tall-narrow
+    // aspect ratio, so the SVG renders edge-to-edge with no surrounding
+    // light-green margin. Scale 300 in a 374-wide viewBox shows roughly 71°
+    // of longitude — just wide enough to include Iceland's mainland on the
+    // west and the Georgian Caucasus on the east, with the EU-27 cluster
+    // commanding the visual centre.
+    const mapProjection = d3.geoMercator()
+      .center([11.5, 55])
+      .translate([MAP_W / 2, MAP_H / 2])
+      .scale(315);
+
+    const mapPath = d3.geoPath(mapProjection);
+
+    // Build the colour scale for a given sector & year. Uses the
+    // value distribution across ALL mapped countries (EU-27 plus the
+    // dataset's neighbouring countries) so the scale spans the actual
+    // range visible on the map — Iceland's high values at the top,
+    // Kosovo's low values at the bottom.
+    function buildColorScale(sector, year) {
+      const theme = SECTOR_THEMES[sector] || SECTOR_THEMES["All"];
+      const ramp  = theme.ramp;
+      const vals  = [];
+      MAPPED_NAMES.forEach(name => {
+        const v = getValue(sector, name, year);
+        if (v !== null && v !== undefined) vals.push(v);
+      });
+      const lo = vals.length ? d3.min(vals) : 0;
+      const hi = vals.length ? d3.max(vals) : 100;
+      // Threshold scale with the 6 ramp colours over (n−1) cut-points.
+      const step = (hi - lo) / ramp.length;
+      const thresholds = d3.range(1, ramp.length).map(i => lo + step * i);
+      const scale = d3.scaleThreshold().domain(thresholds).range(ramp);
+      scale.minVal = lo;
+      scale.maxVal = hi;
+      return scale;
+    }
+
+    // Decide whether the country's fill is dark enough that the label
+    // should switch to a light colour. A simple luminance check on
+    // the hex fill is enough for our 6-stop ramps.
+    function isFillDark(hex) {
+      if (!hex || hex[0] !== "#") return false;
+      const h = hex.length === 4
+        ? hex.slice(1).split("").map(c => parseInt(c + c, 16))
+        : [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+      const lum = (0.299*h[0] + 0.587*h[1] + 0.114*h[2]) / 255;
+      return lum < 0.55;
+    }
+
+    // Resolve a TopoJSON feature to a dataset country name. First try
+    // the ISO numeric ID, then fall back to a name match — needed for
+    // Kosovo, whose disputed status means many sources emit id "-99"
+    // or null and identify the country only by feature.properties.name.
+    function resolveMappedName(feature) {
+      const code = String(feature.id).padStart(3, "0");
+      if (MAPPED_ISO_TO_NAME[code]) return MAPPED_ISO_TO_NAME[code];
+      const propName = feature.properties && feature.properties.name;
+      if (propName && NAME_FALLBACKS[propName]) return NAME_FALLBACKS[propName];
+      return null;
+    }
+
+    async function loadMapTopology() {
+      if (mapTopology) return mapTopology;
+      try {
+        const url = "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json";
+        mapTopology = await d3.json(url);
+        mapCountriesFeatures = topojson.feature(mapTopology, mapTopology.objects.countries).features;
+        // Projection is already configured with fixed Europe-centred params
+        // above, so no fitExtent step here.
+        mapReady = true;
+        const loading = document.getElementById("mapLoading");
+        if (loading) loading.classList.add("hidden");
+      } catch (e) {
+        console.error("Failed to load map topology", e);
+        const loading = document.getElementById("mapLoading");
+        if (loading) {
+          loading.textContent = "Map data could not be loaded.";
+        }
+      }
+      return mapTopology;
+    }
+
+    // Pin labels for very small or oddly-shaped countries that have no
+    // room for a centroid label inside their main visible polygon.
+    // Two modes are supported:
+    //   "leader": label is drawn at centroid + (dxLabel, dyLabel) in
+    //             pixels, with a thin leader line back to the country.
+    //   "geoCentroid": override the country's centroid entirely with a
+    //                  fixed lng/lat point, used for multi-polygon
+    //                  countries (Norway with Svalbard) whose geometric
+    //                  centroid would otherwise land in the ocean.
+    const LABEL_OVERRIDES = {
+      "Belgium":    { mode: "leader", dxLabel: -28, dyLabel:  -2 },
+      "Luxembourg": { mode: "leader", dxLabel:  16, dyLabel:  16 },
+      "Malta":      { mode: "leader", dxLabel: -10, dyLabel:  16 },
+      "Cyprus":     { mode: "leader", dxLabel:  12, dyLabel:  12 },
+      // Multi-polygon / outlying-territory countries: pin to mainland
+      "Norway":     { mode: "geoCentroid", lng: 10, lat: 62 },
+      "Iceland":    { mode: "geoCentroid", lng: -18.5, lat: 65 },
+      "Georgia":    { mode: "geoCentroid", lng: 42, lat: 42 },
+      // Small Balkan countries that crowd each other — push labels out
+      "Montenegro": { mode: "leader", dxLabel: -22, dyLabel:  8 },
+      "Kosovo*":    { mode: "leader", dxLabel:  18, dyLabel:  6 },
+      "Albania":    { mode: "leader", dxLabel: -14, dyLabel:  14 },
+      "North Macedonia": { mode: "leader", dxLabel: 18, dyLabel: 10 },
+      "Moldova":    { mode: "leader", dxLabel:  16, dyLabel:  -2 }
+    };
+
+    /* ============================================================
+       INIT MAP ZOOM — idempotent. Called from buildMap so it's
+       safe to invoke on every rebuild; the actual zoom behaviour
+       is only attached once.
+       ============================================================ */
+    function initMapZoom() {
+      if (mapZoomBehavior) return;
+      const svgEl = document.getElementById("mainMap");
+      const shellEl = document.getElementById("mapShell");
+      const svg = d3.select(svgEl);
+
+      mapZoomBehavior = d3.zoom()
+        .scaleExtent([1, 6])
+        // Keep the map content from being dragged completely out of view.
+        // The viewBox is 460x470; we let it move at most one viewBox worth
+        // off-screen in either direction at max zoom.
+        .translateExtent([[-MAP_W * 0.5, -MAP_H * 0.5],
+                          [MAP_W * 1.5,  MAP_H * 1.5]])
+        .on("start", () => { svgEl.classList.add("zooming"); })
+        .on("end",   () => { svgEl.classList.remove("zooming"); })
+        .on("zoom", (event) => {
+          currentMapTransform = event.transform;
+          d3.select("#mainMap g.map-root")
+            .attr("transform", event.transform.toString());
+          // Mark the shell as "zoomed" so the discovery hint hides
+          // (it has already done its job once the user starts zooming).
+          if (event.transform.k > 1.001 || event.transform.x !== 0 || event.transform.y !== 0) {
+            shellEl.classList.add("zoomed");
+          } else {
+            shellEl.classList.remove("zoomed");
+          }
+        });
+
+      svg.call(mapZoomBehavior);
+
+      // +/- buttons — animate to next zoom level by a 1.6× factor.
+      const animatedZoom = (factor) => {
+        svg.transition().duration(220).call(mapZoomBehavior.scaleBy, factor);
+      };
+      document.getElementById("mapZoomIn") .addEventListener("click", () => animatedZoom(1.6));
+      document.getElementById("mapZoomOut").addEventListener("click", () => animatedZoom(1 / 1.6));
+      document.getElementById("mapZoomReset").addEventListener("click", () => {
+        svg.transition().duration(300).call(mapZoomBehavior.transform, d3.zoomIdentity);
+      });
+    }
+
+    function buildMap() {
+      if (!mapReady) return;
+      const { sector, year } = getFilters();
+      const theme = SECTOR_THEMES[sector] || SECTOR_THEMES["All"];
+      const scale = buildColorScale(sector, year);
+
+      // Subtitle
+      document.getElementById("mapSubtitle").textContent =
+        `${theme.title} · ${year}`;
+
+      // Legend bounds (formatted)
+      document.getElementById("legendLow").textContent  = `${scale.minVal.toFixed(1)}%`;
+      document.getElementById("legendHigh").textContent = `${scale.maxVal.toFixed(1)}%`;
+
+      const svg = d3.select("#mainMap");
+      // Tear down only the map-root group (preserving any other SVG state),
+      // then create a fresh root inside which every layer is drawn.
+      // The root carries the current zoom/pan transform.
+      svg.selectAll("g.map-root").remove();
+      const root = svg.append("g").attr("class", "map-root");
+      // Re-apply any saved zoom/pan so sector or year filter changes don't
+      // snap the view back to default.
+      if (currentMapTransform) {
+        root.attr("transform", currentMapTransform.toString());
+      }
+      // Attach the zoom behaviour once the SVG has its root.
+      initMapZoom();
+
+      // Partition features into mapped (in our Eurostat dataset → get
+      // choropleth colour + tooltip with share) and non-mapped (UK,
+      // Switzerland, Russia, Türkiye, Belarus, Ukraine, N. Africa, etc.
+      // → muted grey context, no data).
+      const mapped   = [];
+      const nonData  = [];
+      mapCountriesFeatures.forEach(f => {
+        const name = resolveMappedName(f);
+        if (name) mapped.push({ feature: f, name });
+        else      nonData.push(f);
+      });
+
+      // CONTEXT LAYER — drawn first so the dataset countries sit on top.
+      const tooltip = document.getElementById("mapTooltip");
+      const shell = document.getElementById("mapShell");
+
+      root.append("g")
+        .attr("class", "non-eu-layer")
+        .selectAll("path")
+        .data(nonData)
+        .join("path")
+          .attr("class", "map-country non-eu")
+          .attr("d", mapPath)
+          .on("mousemove", function(event, d) {
+            const name = (d.properties && d.properties.name) || "—";
+            const sectorLabel = sector === "All" ? "Overall renewable" : sector.replace("&", " & ");
+            tooltip.querySelector(".tt-country").textContent = name;
+            tooltip.querySelector(".tt-meta").textContent = `${sectorLabel} · ${year} · no data`;
+            const valEl = tooltip.querySelector(".tt-value");
+            valEl.textContent = "Not in Eurostat dataset";
+            valEl.classList.add("na");
+            tooltip.classList.add("visible");
+            const rect = shell.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            tooltip.style.left = x + "px";
+            tooltip.style.top  = (y - 8) + "px";
+            const tw = tooltip.offsetWidth;
+            const minX = tw / 2 + 6;
+            const maxX = rect.width - tw / 2 - 6;
+            tooltip.style.left = Math.max(minX, Math.min(maxX, x)) + "px";
+          })
+          .on("mouseleave", function() { tooltip.classList.remove("visible"); });
+
+      // Non-data labels — render at hand-tuned coordinates.
+      const neuLabelLayer = root.append("g").attr("class", "noneu-label-layer");
+      NON_EU_LABEL_COORDS.forEach(([lng, lat, name, sizeClass]) => {
+        const proj = mapProjection([lng, lat]);
+        if (!proj) return;
+        const [lx, ly] = proj;
+        if (lx < -4 || lx > MAP_W + 4 || ly < -4 || ly > MAP_H + 4) return;
+        neuLabelLayer.append("text")
+          .attr("class", "map-label map-label-noneu" + (sizeClass ? " " + sizeClass : ""))
+          .attr("x", lx)
+          .attr("y", ly)
+          .attr("text-anchor", "middle")
+          .attr("dominant-baseline", "middle")
+          .text(name);
+      });
+
+      // MAPPED COUNTRY LAYER — every dataset country (EU-27 plus
+      // neighbouring states like Iceland, Norway, Western Balkans,
+      // Georgia, Kosovo*) gets a choropleth fill and interactive
+      // tooltip with country name, sector, year, and share value.
+      const euLayer = root.append("g").attr("class", "eu-layer");
+
+      euLayer.selectAll("path")
+        .data(mapped)
+        .join("path")
+          .attr("class", "map-country eu27")
+          .attr("d", d => mapPath(d.feature))
+          .attr("fill", d => {
+            const v = getValue(sector, d.name, year);
+            if (v === null || v === undefined) return "#dcd9cf"; // no-data
+            return scale(v);
+          })
+          .on("mousemove", function(event, d) {
+            const v = getValue(sector, d.name, year);
+            const sectorLabel = sector === "All" ? "Overall renewable" : sector.replace("&", " & ");
+            tooltip.querySelector(".tt-country").textContent = d.name;
+            tooltip.querySelector(".tt-meta").textContent = `${sectorLabel} · ${year}`;
+            const valEl = tooltip.querySelector(".tt-value");
+            if (v === null || v === undefined) {
+              valEl.textContent = "No data";
+              valEl.classList.add("na");
+            } else {
+              valEl.textContent = `${v.toFixed(2)}% share`;
+              valEl.classList.remove("na");
+            }
+            tooltip.classList.add("visible");
+            // Position the tooltip, then clamp it to the shell edges so
+            // hovering a border country (Portugal, Cyprus, Finland) doesn't
+            // push the tooltip off-screen.
+            const rect = shell.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            tooltip.style.left = x + "px";
+            tooltip.style.top  = (y - 8) + "px";
+            const tw = tooltip.offsetWidth;
+            const minX = tw / 2 + 6;
+            const maxX = rect.width - tw / 2 - 6;
+            const clampedX = Math.max(minX, Math.min(maxX, x));
+            tooltip.style.left = clampedX + "px";
+          })
+          .on("mouseleave", function() {
+            tooltip.classList.remove("visible");
+          });
+
+      // Labels layer — country name + value on top of each mapped polygon
+      const labelLayer = root.append("g").attr("class", "label-layer");
+      const leaderLayer = root.append("g").attr("class", "leader-layer");
+
+      mapped.forEach(m => {
+        const d = m.feature;
+        const name = m.name;
+        const v = getValue(sector, name, year);
+        const fillHex = (v === null || v === undefined) ? "#dcd9cf" : scale(v);
+        const dark = isFillDark(fillHex);
+
+        const bounds = mapPath.bounds(d);
+        const wPx = bounds[1][0] - bounds[0][0];
+        const hPx = bounds[1][1] - bounds[0][1];
+        let centroid = mapPath.centroid(d);
+
+        const override = LABEL_OVERRIDES[name];
+
+        // Pre-process: geoCentroid override replaces the feature's
+        // centroid entirely with a hand-tuned lng/lat point. Used for
+        // multi-polygon countries (Norway with Svalbard, Iceland) whose
+        // geometric centroid sits in the ocean or off the visible map.
+        if (override && override.mode === "geoCentroid") {
+          const projected = mapProjection([override.lng, override.lat]);
+          if (projected) centroid = projected;
+        }
+
+        // Decide what to render:
+        //  - country too small → show short code only, externally for overrides
+        //  - country wide enough → full name + value below
+        const isTiny = wPx < 22 || hPx < 16;
+        const showFullName = wPx > 36;
+        const displayName = showFullName ? name : (COUNTRY_SHORT[name] || name);
+
+        // External leader-line labels for tiny countries that overlap on the map
+        if (override && override.mode === "leader") {
+          const lx = centroid[0] + override.dxLabel;
+          const ly = centroid[1] + override.dyLabel;
+          leaderLayer.append("line")
+            .attr("x1", centroid[0]).attr("y1", centroid[1])
+            .attr("x2", lx).attr("y2", ly)
+            .attr("stroke", "var(--accent-700)")
+            .attr("stroke-width", 0.6)
+            .attr("opacity", 0.6);
+          const g = labelLayer.append("g").attr("transform", `translate(${lx},${ly})`);
+          g.append("text")
+            .attr("class", "map-label map-label-name")
+            .attr("y", -3)
+            .text(COUNTRY_SHORT[name] || name);
+          if (v !== null && v !== undefined) {
+            g.append("text")
+              .attr("class", "map-label map-label-value")
+              .attr("y", 6)
+              .text(`${v.toFixed(1)}%`);
+          }
+          return;
+        }
+
+        // In-place centroid labels
+        const g = labelLayer.append("g")
+          .attr("transform", `translate(${centroid[0]},${centroid[1]})`);
+
+        if (isTiny) {
+          g.append("text")
+            .attr("class", `map-label map-label-name${dark ? " dark" : ""}`)
+            .attr("y", -3)
+            .text(COUNTRY_SHORT[name] || name);
+          if (v !== null && v !== undefined) {
+            g.append("text")
+              .attr("class", `map-label map-label-value${dark ? " dark" : ""}`)
+              .attr("y", 6)
+              .text(`${v.toFixed(1)}%`);
+          } else {
+            g.append("text")
+              .attr("class", `map-label map-label-value${dark ? " dark" : ""}`)
+              .attr("y", 6)
+              .text("n/a");
+          }
+        } else {
+          g.append("text")
+            .attr("class", `map-label map-label-name${dark ? " dark" : ""}`)
+            .attr("y", -4)
+            .text(displayName);
+          if (v !== null && v !== undefined) {
+            g.append("text")
+              .attr("class", `map-label map-label-value${dark ? " dark" : ""}`)
+              .attr("y", 6)
+              .text(`${v.toFixed(1)}%`);
+          } else {
+            g.append("text")
+              .attr("class", `map-label map-label-value${dark ? " dark" : ""}`)
+              .attr("y", 6)
+              .text("n/a");
+          }
+        }
+      });
+    }
 
     // ======================================================================
     // INITIALIZE — derive year/country lists from current DATA
@@ -691,20 +1719,75 @@
         .sort((a, b) => b.v - a.v);
 
       document.getElementById("barSubtitle").textContent =
-        `· ${sector === "All" ? "Overall" : sector.replace("&", " & ")} · ${year}`;
+        `· ${sector === "All" ? "Overall" : sector.replace("&", " & ")} · ${year} · ${pairs.length} countries`;
+
+      // Dynamically size the inner scroll container so each bar gets ~16px of
+      // vertical room. The outer .chart-wrap stays at its fixed height; the
+      // inner container becomes taller and overflows, producing the scrollbar.
+      const inner = document.getElementById("barInner");
+      if (inner) {
+        const PER_BAR = 16;
+        const AXIS_PAD = 36;
+        inner.style.height = Math.max(235, pairs.length * PER_BAR + AXIS_PAD) + "px";
+      }
 
       const ctx = document.getElementById("barChart").getContext("2d");
       if (barChart) barChart.destroy();
 
+      // End-of-bar value labels — drawn INSIDE the bar in white when there's
+      // room, so each label is unambiguously on its own bar. Only short bars
+      // get the fallback of dark text past the bar end. Aligned with the
+      // visible y-axis country names so labels and names always pair 1:1.
+      const barLabelsPlugin = {
+        id: "barLabels",
+        afterDatasetsDraw(chart) {
+          const { ctx, chartArea: { right }, scales: { x, y } } = chart;
+          const meta = chart.getDatasetMeta(0);
+          const data = chart.data.datasets[0].data;
+          if (!y || !y.ticks) return;
+          ctx.save();
+          ctx.font = "600 10px Manrope";
+          ctx.textBaseline = "middle";
+          y.ticks.forEach(tick => {
+            const i = tick.value;
+            const bar = meta.data[i];
+            const v = data[i];
+            if (!bar || v === null || v === undefined) return;
+            const label = `${v.toFixed(1)}%`;
+            const w = ctx.measureText(label).width;
+            const barLeft = x.left;
+            const barWidth = bar.x - barLeft;
+            // Prefer inside the bar (white, right-aligned) when there's room
+            if (barWidth >= w + 10) {
+              ctx.textAlign = "right";
+              ctx.fillStyle = "#ffffff";
+              ctx.fillText(label, bar.x - 5, bar.y);
+            } else if (bar.x + 4 + w <= right) {
+              // Otherwise place it just past the bar end in dark text
+              ctx.textAlign = "left";
+              ctx.fillStyle = "#0f1f15";
+              ctx.fillText(label, bar.x + 4, bar.y);
+            } else {
+              // Last resort: cram it inside the bar end even if tight
+              ctx.textAlign = "right";
+              ctx.fillStyle = "#ffffff";
+              ctx.fillText(label, bar.x - 3, bar.y);
+            }
+          });
+          ctx.restore();
+        }
+      };
+
       barChart = new Chart(ctx, {
         type: "bar",
+        plugins: [barLabelsPlugin],
         data: {
           labels: pairs.map(p => p.c),
           datasets: [{
             label: `Renewable share (%) · ${year}`,
             data: pairs.map(p => p.v),
-            backgroundColor: PALETTE.green,
-            hoverBackgroundColor: PALETTE.greenDk,
+            backgroundColor: cssVar("--accent-600"),
+            hoverBackgroundColor: cssVar("--accent-800"),
             borderRadius: 3,
             barThickness: 'flex',
             maxBarThickness: 14
@@ -714,10 +1797,12 @@
           responsive: true,
           maintainAspectRatio: false,
           indexAxis: "y",
+          // Repopulate the sticky axis when Chart.js redraws (resize, etc.)
+          onResize: () => requestAnimationFrame(populateStickyAxis),
           plugins: {
             legend: { display: false },
             tooltip: {
-              backgroundColor: "#062b17",
+              backgroundColor: cssVar("--accent-900"),
               titleFont: { family: "Manrope", size: 12, weight: 600 },
               bodyFont:  { family: "Manrope", size: 12 },
               padding: 10, cornerRadius: 6, displayColors: false,
@@ -727,15 +1812,41 @@
           scales: {
             x: {
               beginAtZero: true,
-              grid: { color: "#eef3ed", drawBorder: false },
-              ticks: { color: "#5b6e63", font: { family: "Manrope", size: 10 }, callback: v => v + "%" }
+              grid: { color: cssVar("--accent-grid"), drawBorder: false },
+              ticks: { display: false }
             },
             y: {
               grid: { display: false },
-              ticks: { color: "#0f1f15", font: { family: "Manrope", size: 10 } }
+              ticks: {
+                color: "#0f1f15",
+                font: { family: "Manrope", size: 10 },
+                autoSkip: false
+              }
             }
           }
         }
+      });
+
+      // After the chart renders, build the sticky percentage axis at the top.
+      // Tick positions are read from Chart.js so the sticky labels align
+      // exactly with the chart's gridlines.
+      requestAnimationFrame(populateStickyAxis);
+    }
+
+    function populateStickyAxis() {
+      const stickyAxis = document.getElementById("barStickyAxis");
+      if (!stickyAxis || !barChart) return;
+      const xScale = barChart.scales && barChart.scales.x;
+      if (!xScale || !xScale.ticks) return;
+      stickyAxis.innerHTML = "";
+      xScale.ticks.forEach(tick => {
+        const x = xScale.getPixelForValue(tick.value);
+        if (x < xScale.left - 1 || x > xScale.right + 1) return;
+        const span = document.createElement("span");
+        span.className = "tick";
+        span.style.left = x + "px";
+        span.textContent = tick.value + "%";
+        stickyAxis.appendChild(span);
       });
     }
 
@@ -752,9 +1863,15 @@
         `· ${sector === "All" ? "overall" : sector.replace("&", " & ")} · ${yearLo}–${yearHi}`;
 
       const ctx = document.getElementById("lineChart").getContext("2d");
+      const accent600 = cssVar("--accent-600");
+      const accent800 = cssVar("--accent-800");
+      const accent900 = cssVar("--accent-900");
+      const accentGrid = cssVar("--accent-grid");
+
       const grad = ctx.createLinearGradient(0, 0, 0, 280);
-      grad.addColorStop(0, "rgba(25,122,71,0.22)");
-      grad.addColorStop(1, "rgba(25,122,71,0)");
+      const lineBg = cssVar("--accent-line-bg") || "rgba(45,122,44,0.18)";
+      grad.addColorStop(0, lineBg);
+      grad.addColorStop(1, "rgba(255,255,255,0)");
 
       if (lineChart) lineChart.destroy();
 
@@ -803,13 +1920,13 @@
           datasets: [{
             label: `EU-27 ${sector === "All" ? "overall" : sector.replace("&", " & ")} (%)`,
             data: values,
-            borderColor: PALETTE.greenDk,
+            borderColor: accent800,
             backgroundColor: grad,
             fill: true,
             tension: 0.35,
             pointRadius: 2.5,
             pointHoverRadius: 5,
-            pointBackgroundColor: PALETTE.green,
+            pointBackgroundColor: accent600,
             pointBorderColor: "#fff",
             pointBorderWidth: 1.5,
             borderWidth: 2.2
@@ -821,7 +1938,7 @@
           plugins: {
             legend: { display: false },
             tooltip: {
-              backgroundColor: "#062b17",
+              backgroundColor: accent900,
               titleFont: { family: "Manrope", size: 12, weight: 600 },
               bodyFont:  { family: "Manrope", size: 12 },
               padding: 10, cornerRadius: 6, displayColors: false,
@@ -832,7 +1949,7 @@
             y: {
               beginAtZero: true,
               suggestedMax: sector === "All" ? 50 : undefined,
-              grid: { color: "#eef3ed", drawBorder: false },
+              grid: { color: accentGrid, drawBorder: false },
               ticks: { color: "#5b6e63", font: { family: "Manrope", size: 10 }, callback: v => v + "%" }
             },
             x: {
@@ -858,13 +1975,77 @@
       // Highlight the selected sector; mute others. "All" keeps every slice in full color.
       const MUTED = "#cbd9c8";
       const colors = sectors.map(s =>
-        sector === "All" || sector === s ? SECTOR_COLORS[s] : MUTED
+        sector === "All" || sector === s ? SECTOR_SLICE_COLOR[s] : MUTED
       );
+
+      // Centre text — big % + sector label
+      const centerVal = sector === "All"
+        ? getValue("All", EU_LABEL, year)
+        : getValue(sector, EU_LABEL, year);
+      const centerLabel = sector === "All"
+        ? "EU-27 overall"
+        : sector.replace("&", " & ");
+
+      const donutCenterPlugin = {
+        id: "donutCenter",
+        afterDraw(chart) {
+          const { ctx, chartArea } = chart;
+          if (!chartArea) return;
+          // Center the text in the donut hole. The legend pushes the chart
+          // upward, so use the center of the actual chart area not the canvas.
+          const cx = (chartArea.left + chartArea.right) / 2;
+          const cy = (chartArea.top + chartArea.bottom) / 2;
+          ctx.save();
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = cssVar("--accent-900");
+          ctx.font = "700 22px Manrope";
+          ctx.fillText(centerVal !== null ? `${centerVal.toFixed(1)}%` : "n/a", cx, cy - 7);
+          ctx.fillStyle = "#5b6e63";
+          ctx.font = "500 9.5px Manrope";
+          ctx.fillText(centerLabel, cx, cy + 12);
+          ctx.restore();
+        }
+      };
+
+      // Inline label for each slice — same idea as bar end labels:
+      // every sector shows its percentage right on its slice. White text
+      // on full-color slices, muted dark text on faded slices.
+      const sliceLabelsPlugin = {
+        id: "sliceLabels",
+        afterDatasetsDraw(chart) {
+          const { ctx } = chart;
+          const meta = chart.getDatasetMeta(0);
+          if (!meta || !meta.data) return;
+          ctx.save();
+          ctx.font = "700 11px Manrope";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          meta.data.forEach((arc, i) => {
+            const v = chart.data.datasets[0].data[i];
+            if (!v) return;
+            // Skip very thin slices that wouldn't fit a readable label
+            const angleSize = arc.endAngle - arc.startAngle;
+            if (angleSize < 0.3) return;
+            const midAngle = (arc.startAngle + arc.endAngle) / 2;
+            // Place the label 60% of the way from the inner hole to the outer edge
+            const r = arc.innerRadius + (arc.outerRadius - arc.innerRadius) * 0.6;
+            const x = arc.x + Math.cos(midAngle) * r;
+            const y = arc.y + Math.sin(midAngle) * r;
+            // White on highlighted slices, dark on muted ones
+            const isHighlighted = sector === "All" || sector === sectors[i];
+            ctx.fillStyle = isHighlighted ? "#ffffff" : "#5b6e63";
+            ctx.fillText(`${v.toFixed(1)}%`, x, y);
+          });
+          ctx.restore();
+        }
+      };
 
       const ctx = document.getElementById("donutChart").getContext("2d");
       if (donutChart) donutChart.destroy();
       donutChart = new Chart(ctx, {
         type: "doughnut",
+        plugins: [donutCenterPlugin, sliceLabelsPlugin],
         data: {
           labels: sectors.map(s => s.replace("&", " & ")),
           datasets: [{
@@ -889,7 +2070,7 @@
               }
             },
             tooltip: {
-              backgroundColor: "#062b17",
+              backgroundColor: cssVar("--accent-900"),
               titleFont: { family: "Manrope", size: 12, weight: 600 },
               bodyFont:  { family: "Manrope", size: 12 },
               padding: 10, cornerRadius: 6,
@@ -921,8 +2102,23 @@
         const diff = endVal - startVal;
         const sign = diff > 0 ? "+" : (diff < 0 ? "−" : "");
         changeEl.textContent = `${sign}${Math.abs(diff).toFixed(2)} pp`;
-        changeEl.style.color = diff >= 0 ? "var(--green-900)" : "var(--amber-500)";
-        changeSubEl.textContent = `${yearLo} → ${yearHi}`;
+        changeEl.style.color = diff >= 0 ? "var(--accent-900)" : "var(--amber-500)";
+        // Sub-line gives the relative growth so the headline pp number
+        // reads in the same terms as the trend line above (which shows
+        // visual triplication, not "+15 pp"). Use multiplier for big
+        // moves (>= ~2x), percent growth otherwise.
+        let growthLabel = "";
+        if (startVal > 0) {
+          const ratio = endVal / startVal;
+          if (ratio >= 1.8) {
+            growthLabel = ` · ~${ratio.toFixed(1)}× growth`;
+          } else if (ratio >= 1) {
+            growthLabel = ` · +${((ratio - 1) * 100).toFixed(0)}%`;
+          } else {
+            growthLabel = ` · ${((ratio - 1) * 100).toFixed(0)}%`;
+          }
+        }
+        changeSubEl.textContent = `${yearLo} → ${yearHi}${growthLabel}`;
       } else if (yearLo === yearHi) {
         changeEl.textContent = "—";
         changeEl.style.color = "var(--text-muted)";
@@ -954,6 +2150,119 @@
     }
 
     // ======================================================================
+    // DYNAMIC KEY INSIGHT — single-line analytical summary that updates
+    // with sector + year filters. Now incorporates EU regional rankings
+    // so the insight reports which macro-region of Europe is leading
+    // on the selected sector and year.
+    // ======================================================================
+    function buildInsight() {
+      const { sector, yearLo, yearHi, year, countries } = getFilters();
+      const sectorLabel = sector === "All"
+        ? "overall renewable share"
+        : sector.replace("&", " & ").toLowerCase();
+
+      const euVal = getValue(sector, EU_LABEL, year);
+      const startVal = getValue(sector, EU_LABEL, yearLo);
+      const endVal   = getValue(sector, EU_LABEL, yearHi);
+
+      // Top performers across the full dataset — same scope as the
+      // choropleth, the bar chart, and the Top & Bottom 5 ranking table.
+      // Includes Iceland, Norway, and the Western Balkans alongside the
+      // EU-27, so the insight headline matches what the user sees ranked
+      // on the rest of the dashboard.
+      const topPairs = countries
+        .filter(c => MAPPED_NAMES.has(c))
+        .map(c => ({ c, v: getValue(sector, c, year) }))
+        .filter(p => p.v !== null)
+        .sort((a, b) => b.v - a.v);
+      const top3 = topPairs.slice(0, 3);
+
+      // Regional averages — mean renewable share per EU macro-region,
+      // sorted high to low so the leading region is index 0.
+      const regionalAverages = Object.entries(EU_REGIONS).map(([region, members]) => {
+        const vals = members
+          .map(c => getValue(sector, c, year))
+          .filter(v => v !== null && v !== undefined);
+        const mean = vals.length ? vals.reduce((s, x) => s + x, 0) / vals.length : null;
+        return { region, mean };
+      }).filter(r => r.mean !== null);
+      regionalAverages.sort((a, b) => b.mean - a.mean);
+
+      const leadingRegion = regionalAverages[0];
+      const runnerUpRegion = regionalAverages[1];
+
+      let parts = [];
+
+      // 1) Top 3 performers — names with their share values. Drawn from
+      // the full dataset (EU-27 + neighbours) so the headline matches the
+      // bar chart and ranking table elsewhere on the dashboard.
+      if (top3.length === 3) {
+        parts.push(
+          `In <strong>${year}</strong>, the top three performers on ${sectorLabel} are ` +
+          `<strong>${top3[0].c}</strong> (<span class="num">${top3[0].v.toFixed(1)}%</span>), ` +
+          `<strong>${top3[1].c}</strong> (<span class="num">${top3[1].v.toFixed(1)}%</span>), and ` +
+          `<strong>${top3[2].c}</strong> (<span class="num">${top3[2].v.toFixed(1)}%</span>).`
+        );
+      } else if (top3.length > 0) {
+        const list = top3.map(t =>
+          `<strong>${t.c}</strong> (<span class="num">${t.v.toFixed(1)}%</span>)`
+        ).join(", ");
+        const verb = top3.length === 1 ? "is" : "are";
+        parts.push(
+          `In <strong>${year}</strong>, ${list} ${verb} the top performer${top3.length === 1 ? "" : "s"} on ${sectorLabel}.`
+        );
+      }
+
+      // 2) Leading region — names the region with the highest average share
+      // and characterises the size of the lead over the runner-up.
+      if (leadingRegion) {
+        let lead = `The <strong>${leadingRegion.region} region</strong> leads with a regional average of <strong class="num">${leadingRegion.mean.toFixed(1)}%</strong>`;
+        if (runnerUpRegion) {
+          const gap = leadingRegion.mean - runnerUpRegion.mean;
+          let qualifier;
+          if      (gap < 1)  qualifier = "essentially tied with";
+          else if (gap < 4)  qualifier = "narrowly ahead of";
+          else if (gap < 10) qualifier = "ahead of";
+          else               qualifier = "comfortably ahead of";
+          lead += `, ${qualifier} the <strong>${runnerUpRegion.region} region</strong> at <strong class="num">${runnerUpRegion.mean.toFixed(1)}%</strong>`;
+        }
+        parts.push(lead + ".");
+      }
+
+      // 3) Progress toward the EU's binding 42.5% 2030 target —
+      // only meaningful for the overall renewable share (All sectors).
+      // Phrased as a direct statement of distance to the goal rather
+      // than the political "bloc" shorthand.
+      if (sector === "All" && euVal !== null) {
+        const gapToTarget = 42.5 - euVal;
+        if (gapToTarget > 0) {
+          parts.push(
+            `That puts the EU-27 <strong class="num">${gapToTarget.toFixed(1)} pp</strong> ` +
+            `short of the <strong>42.5% 2030 renewable energy target</strong>.`
+          );
+        } else {
+          parts.push(
+            `The EU-27 has now <strong>exceeded</strong> its <strong>42.5% 2030 renewable energy target</strong> by ` +
+            `<strong class="num">${Math.abs(gapToTarget).toFixed(1)} pp</strong>.`
+          );
+        }
+      }
+
+      // 4) Percentage-point change across the selected year range.
+      if (yearLo !== yearHi && startVal !== null && endVal !== null) {
+        const diff = endVal - startVal;
+        const sign = diff >= 0 ? "+" : "−";
+        parts.push(
+          `Across <strong>${yearLo}–${yearHi}</strong>, the EU-27 ${sectorLabel} moved by ` +
+          `<strong class="num">${sign}${Math.abs(diff).toFixed(1)} pp</strong>.`
+        );
+      }
+
+      const text = parts.join(" ");
+      document.getElementById("insightText").innerHTML = text || "–";
+    }
+
+    // ======================================================================
     // RANK TABLE
     // ======================================================================
     function buildRanking() {
@@ -974,8 +2283,10 @@
 
       const addRow = (rank, country, value, isTop) => {
         const tr = document.createElement("tr");
+        const topColor = cssVar("--accent-600");
+        const botColor = cssVar("--amber-500") || "#d97706";
         tr.innerHTML = `
-          <td style="color:${isTop ? PALETTE.green : PALETTE.amber};font-weight:700;">
+          <td style="color:${isTop ? topColor : botColor};font-weight:700;">
             ${isTop ? "▲" : "▼"} ${rank}
           </td>
           <td>${country}</td>
@@ -996,39 +2307,22 @@
     }
 
     // ======================================================================
-    // MAP SWITCHER
+    // MAP SWITCHER — now powered by the in-page D3 choropleth (buildMap).
     // ======================================================================
-    const MAP_URLS = {
-      "All":             "https://datawrapper.dwcdn.net/a1eFL/1/",
-      "Electricity":     "https://datawrapper.dwcdn.net/jNTBB/1/",
-      "Heating&Cooling": "https://datawrapper.dwcdn.net/cRogX/2/",
-      "Transport":       "https://datawrapper.dwcdn.net/ag947/4/"
-    };
-    const MAP_TITLES = {
-      "All":             "Overall Renewable Energy Share",
-      "Electricity":     "Electricity Sector",
-      "Heating&Cooling": "Heating & Cooling Sector",
-      "Transport":       "Transport Sector"
-    };
     function updateMap() {
-      const { sector } = getFilters();
-      const iframe = document.getElementById("mainMap");
-      const subtitle = document.getElementById("mapSubtitle");
-      const newSrc = MAP_URLS[sector];
-      subtitle.textContent = MAP_TITLES[sector];
-      const currentSrc = iframe.getAttribute("src");
-      if (currentSrc !== newSrc) {
-        iframe.style.opacity = "0.3";
-        iframe.setAttribute("src", newSrc);
-        iframe.onload = () => { iframe.style.opacity = "1"; };
-      }
+      if (!mapReady) return; // first paint runs after topology arrives
+      buildMap();
     }
 
     // ======================================================================
-    // MAIN REFRESH
+    // MAIN REFRESH — apply the theme first so every chart that reads
+    // CSS variables picks up the new accent palette on the same tick.
     // ======================================================================
     function refresh() {
+      const { sector } = getFilters();
+      applyTheme(sector);
       buildKPIs();
+      buildInsight();
       buildBar();
       buildLine();
       buildDonut();
@@ -1052,14 +2346,25 @@
     });
 
     // ======================================================================
-    // INITIAL RENDER — wait for fonts so Chart.js measures labels correctly
+    // INITIAL RENDER — wait for fonts so Chart.js measures labels correctly.
+    // The choropleth's topology is fetched in parallel; the map renders as
+    // soon as it arrives without blocking the rest of the dashboard.
     // ======================================================================
     initDataDerived();
     updateSlicer();
+    applyTheme("All");
+
+    function firstPaint() {
+      refresh();           // KPIs, charts, insight, ranking
+      loadMapTopology().then(() => {
+        if (mapReady) buildMap();
+      });
+    }
+
     if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(refresh);
+      document.fonts.ready.then(firstPaint);
     } else {
-      refresh();
+      firstPaint();
     }
   </script>
 </body>
